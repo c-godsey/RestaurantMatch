@@ -168,8 +168,10 @@
     background-color: #262b3a; flex-shrink: 0; display: grid; place-items: center; }
   .match-item .m-name { font-weight: 700; font-size: 15px; }
   .match-item .m-meta { font-size: 12px; color: var(--muted); margin-top: 3px; }
-  .match-item .m-links { display: flex; flex-direction: column; gap: 6px; }
-  .match-item a { color: var(--accent2); font-size: 12px; text-decoration: none; white-space: nowrap; }
+  .match-item .m-links { display: flex; flex-direction: column; gap: 6px; align-items: stretch; }
+  .match-item a { color: var(--accent2); font-size: 12px; text-decoration: none; white-space: nowrap; text-align: center; }
+  .match-item .m-links a.dd { background: #ff3008; color: #fff; padding: 6px 10px; border-radius: 8px; font-weight: 700; }
+  .match-item .m-links a.resv { background: #1b4d3e; color: #d7ffef; border: 1px solid var(--accent2); padding: 6px 10px; border-radius: 8px; font-weight: 700; }
   .status { font-size: 12px; color: var(--muted); text-align: center; padding: 8px; }
   .waiting { text-align: center; color: var(--muted); font-size: 14px; margin-top: 20px; line-height: 1.6; }
   .celebrate { position: fixed; inset: 0; background: rgba(10,12,18,0.85); display: none; z-index: 50;
@@ -280,6 +282,16 @@
       <div class="invite-note" id="inviteNote">Tap <b>Invite</b> above to send your room code to the group.</div>
     </div>
     <div class="cuisine-grid" id="cuisineGrid"></div>
+    <label style="margin:6px 0 6px">Search distance</label>
+    <select id="voteRadius">
+      <option value="1600">Walking · 1 mile</option>
+      <option value="3200" selected>Nearby · 2 miles</option>
+      <option value="8000">A short drive · 5 miles</option>
+      <option value="16000">Wider · 10 miles</option>
+      <option value="24000">Regional · 15 miles</option>
+      <option value="32000">Far · 20 miles</option>
+      <option value="40000">Max · 25 miles</option>
+    </select>
     <div class="members" id="membersList"></div>
     <button class="primary" id="startSwipeBtn">Start swiping</button>
     <button id="voteBackBtn" class="ghostbtn" style="display:none">← Back to swiping</button>
@@ -306,7 +318,7 @@
         <button class="like" id="btnLike" title="Like">♥</button>
       </div>
       <div class="status" id="deckStatus"></div>
-      <button id="editCuisinesBtn" class="ghostbtn">🍽️ Edit cuisines</button>
+      <button id="editCuisinesBtn" class="ghostbtn">🍽️ Adjust cuisines &amp; distance</button>
     </div>
 
     <div id="matchesView" style="flex:1;display:none;flex-direction:column;min-height:0">
@@ -634,6 +646,7 @@ function enterVote() {
   $("roompill").style.display = "";
   $("inviteBtn").style.display = "";
   $("roomLabel").textContent = roomCode;
+  if (radius) $("voteRadius").value = String(radius);
   renderCuisines();
 }
 
@@ -732,6 +745,7 @@ async function startSwiping() {
   $("startSwipeBtn").disabled = true;
   $("voteHint").textContent = "Building the deck…";
   try {
+    radius = Number($("voteRadius").value) || radius; // honor the chosen distance
     const deckRef = ref(db, `rooms/${roomCode}/restaurants`);
     const existing = await get(deckRef);
     const agreed = computeAgreedCuisines();
@@ -740,13 +754,13 @@ async function startSwiping() {
     if (!existing.exists()) {
       // first build
       if (!found.length) {
-        $("voteHint").textContent = "No spots found — add more cuisines or widen the radius.";
+        $("voteHint").textContent = "No spots found — add more cuisines or widen the distance.";
         $("startSwipeBtn").disabled = false; return;
       }
       $("voteHint").textContent = "Loading storefront photos…";
       await addStreetView(found);
       await runTransaction(deckRef, (cur) => cur === null ? arrToMap(found) : cur);
-      await update(ref(db, `rooms/${roomCode}/meta`), { phase: "swipe" });
+      await update(ref(db, `rooms/${roomCode}/meta`), { phase: "swipe", radius: Number(radius) });
       // subscribeMeta moves everyone into the deck
     } else {
       // deck exists → expand it with any new spots for the updated cuisines
@@ -761,6 +775,7 @@ async function startSwiping() {
         fresh.forEach((r, i) => { updates[String(start + i).padStart(3, "0") + "_" + r.id] = r; });
         await update(deckRef, updates);
       }
+      await update(ref(db, `rooms/${roomCode}/meta`), { radius: Number(radius) });
       editingCuisines = false;
       $("voteBackBtn").style.display = "none";
       $("startSwipeBtn").textContent = "Start swiping";
@@ -847,7 +862,8 @@ function openCuisineEditor() {
   editingCuisines = true;
   $("startSwipeBtn").textContent = "Update deck";
   $("voteBackBtn").style.display = "";
-  $("voteHint").textContent = "Add cuisines to bring more spots into the deck for everyone.";
+  $("voteHint").textContent = "Adjust cuisines or distance to pull more spots into the deck for everyone.";
+  if (radius) $("voteRadius").value = String(radius);
   show($("deckScreen"), false);
   show($("voteScreen"), true);
 }
@@ -1129,8 +1145,9 @@ function renderMatches() {
         <div class="m-meta" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escapeHtml(r.address)}</div>
       </div>
       <div class="m-links">
+        <a class="dd" href="${escapeAttr(r.doordash)}" target="_blank" rel="noopener">🛵 DoorDash</a>
+        <a class="resv" href="${escapeAttr(r.reserve)}" target="_blank" rel="noopener">📅 Reserve</a>
         <a href="${escapeAttr(r.reviewsUrl)}" target="_blank" rel="noopener">Reviews ↗</a>
-        ${r.url ? `<a href="${escapeAttr(r.url)}" target="_blank" rel="noopener">Map ↗</a>` : ""}
       </div>
     </div>`;
   }).join("");
@@ -1152,8 +1169,6 @@ async function openProfile(r) {
   $("pAddr").textContent = r.address || "";
   const links = [];
   links.push(`<a class="menu" href="${escapeAttr(r.reviewsUrl)}" target="_blank" rel="noopener">⭐ Reviews</a>`);
-  links.push(`<a class="dd" href="${escapeAttr(r.doordash)}" target="_blank" rel="noopener">🛵 DoorDash</a>`);
-  links.push(`<a class="resv" href="${escapeAttr(r.reserve)}" target="_blank" rel="noopener">📅 Reserve</a>`);
   if (r.url) links.push(`<a class="map" href="${escapeAttr(r.url)}" target="_blank" rel="noopener">🗺️ Maps</a>`);
   $("pLinks").innerHTML = links.join("");
   $("profile").classList.add("show");
