@@ -25,11 +25,14 @@
     overflow: hidden;
   }
   .app { width: 100%; max-width: 440px; height: 100dvh; display: flex; flex-direction: column; padding: 14px; }
-  header { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 4px 2px 10px; }
-  .logo { font-weight: 800; font-size: 22px; letter-spacing: -0.5px; }
+  header { display: flex; align-items: center; justify-content: space-between; gap: 8px 10px;
+    padding: 4px 2px 10px; flex-wrap: wrap; }
+  .logo { font-weight: 800; font-size: 20px; letter-spacing: -0.5px; flex-shrink: 0; }
   .logo span { color: var(--accent); }
+  .headright { display: flex; gap: 8px; align-items: center; min-width: 0; flex-shrink: 1; }
   .roompill { font-size: 12px; color: var(--muted); background: var(--card); border: 1px solid var(--line);
-    padding: 6px 10px; border-radius: 999px; white-space: nowrap; }
+    padding: 6px 10px; border-radius: 999px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    max-width: 150px; }
   .roompill b { color: var(--text); letter-spacing: 1px; }
   .screen { flex: 1; display: none; flex-direction: column; min-height: 0; }
   .screen.active { display: flex; }
@@ -49,6 +52,20 @@
   .modebtn { padding: 13px; border-radius: 12px; border: 1px solid var(--line); background: var(--card);
     color: var(--muted); font-size: 15px; font-weight: 600; cursor: pointer; }
   .modebtn.active { border-color: var(--accent2); color: var(--text); background: #12251f; }
+
+  /* Cuisine vote */
+  .vote { min-height: 0; }
+  .vote h2 { margin: 0 0 4px; font-size: 20px; }
+  .vote p { margin: 0 0 10px; color: var(--muted); font-size: 14px; line-height: 1.5; }
+  .cuisine-grid { display: flex; flex-wrap: wrap; gap: 10px; overflow-y: auto; align-content: flex-start;
+    flex: 1; padding: 2px; min-height: 0; }
+  .chip { display: inline-flex; align-items: center; gap: 7px; padding: 11px 14px; border-radius: 999px;
+    border: 1px solid var(--line); background: var(--card); color: var(--text); font-size: 14px;
+    font-weight: 600; cursor: pointer; height: fit-content; }
+  .chip.sel { border-color: var(--accent2); background: #12251f; }
+  .chip .cnt { min-width: 20px; height: 20px; padding: 0 5px; border-radius: 999px; background: var(--accent2);
+    color: #05221d; font-size: 12px; font-weight: 800; display: none; align-items: center; justify-content: center; }
+  .chip .cnt.show { display: inline-flex; }
   button.primary {
     margin-top: 16px; width: 100%; padding: 15px; border: none; border-radius: 12px;
     background: linear-gradient(135deg, var(--accent), #ff8a5f); color: white; font-size: 16px;
@@ -163,9 +180,9 @@
 <div class="app">
   <header>
     <div class="logo">Restaurant<span>Match</span></div>
-    <div style="display:flex;gap:8px;align-items:center">
-      <div class="roompill" id="roompill" style="display:none">Room <b id="roomLabel">—</b></div>
-      <button id="inviteBtn" style="display:none;cursor:pointer;border:none;border-radius:999px;padding:9px 16px;font-size:14px;font-weight:800;color:#05221d;background:linear-gradient(135deg,var(--accent2),#3ee0c0);box-shadow:0 4px 14px rgba(0,198,162,0.4);white-space:nowrap">📲 Invite</button>
+    <div class="headright">
+      <div class="roompill" id="roompill" style="display:none"><b id="roomLabel">—</b></div>
+      <button id="inviteBtn" style="display:none;flex-shrink:0;cursor:pointer;border:none;border-radius:999px;padding:9px 15px;font-size:14px;font-weight:800;color:#05221d;background:linear-gradient(135deg,var(--accent2),#3ee0c0);box-shadow:0 4px 14px rgba(0,198,162,0.4);white-space:nowrap">📲 Invite</button>
     </div>
   </header>
 
@@ -202,9 +219,20 @@
           <option value="16000">Wider · 10 miles</option>
         </select>
       </div>
-      <button class="primary" id="startBtn">Start swiping</button>
+      <button class="primary" id="startBtn">Join room</button>
       <div class="hint" id="setupHint">Only the first person to join sets the location for the whole group.</div>
     </div>
+  </section>
+
+  <!-- CUISINE VOTE -->
+  <section class="screen vote" id="voteScreen">
+    <div>
+      <h2>What's everyone craving? 🍽️</h2>
+      <p>Tap the cuisines you're up for — everyone votes, and the deck is built from what the group agrees on. <span id="voterCount">1</span> in the room.</p>
+    </div>
+    <div class="cuisine-grid" id="cuisineGrid"></div>
+    <button class="primary" id="startSwipeBtn">Start swiping</button>
+    <div class="hint" id="voteHint">Pressing Start builds the deck for everyone. You can start with any votes in.</div>
   </section>
 
   <!-- DECK -->
@@ -299,7 +327,7 @@ function configReady() {
 }
 
 /* ---------- state ---------- */
-let db, myId, myName, roomCode, radius;
+let db, myId, myName, roomCode, radius, center;
 let restaurants = [];   // ordered list for this room
 let mySwipes = {};      // placeId -> true/false
 let allSwipes = {};     // placeId -> { userId: bool }
@@ -308,6 +336,31 @@ let seenMatches = new Set();
 let roomUsers = {};     // userId -> {name}
 let userCount = 1;      // people in the room
 let locMode = "gps";    // "gps" or "place"
+let myCuisines = new Set();
+let cuisineVotes = {};  // uid -> { cuisineId: true }
+let swipesSubbed = false;
+
+// cuisines the group can vote on → Google Place types used to search
+const CUISINES = [
+  { id: "mexican", label: "Mexican", emoji: "🌮", types: ["mexican_restaurant"] },
+  { id: "italian", label: "Italian", emoji: "🍝", types: ["italian_restaurant"] },
+  { id: "pizza", label: "Pizza", emoji: "🍕", types: ["pizza_restaurant"] },
+  { id: "chinese", label: "Chinese", emoji: "🥡", types: ["chinese_restaurant"] },
+  { id: "japanese", label: "Japanese / Sushi", emoji: "🍱", types: ["japanese_restaurant", "sushi_restaurant", "ramen_restaurant"] },
+  { id: "thai", label: "Thai", emoji: "🍜", types: ["thai_restaurant"] },
+  { id: "indian", label: "Indian", emoji: "🍛", types: ["indian_restaurant"] },
+  { id: "american", label: "American", emoji: "🍔", types: ["american_restaurant", "hamburger_restaurant"] },
+  { id: "bbq", label: "BBQ", emoji: "🍖", types: ["barbecue_restaurant"] },
+  { id: "seafood", label: "Seafood", emoji: "🦐", types: ["seafood_restaurant"] },
+  { id: "steak", label: "Steakhouse", emoji: "🥩", types: ["steak_house"] },
+  { id: "mediterranean", label: "Mediterranean", emoji: "🥙", types: ["mediterranean_restaurant", "greek_restaurant", "middle_eastern_restaurant"] },
+  { id: "korean", label: "Korean", emoji: "🍲", types: ["korean_restaurant"] },
+  { id: "vietnamese", label: "Vietnamese", emoji: "🍲", types: ["vietnamese_restaurant"] },
+  { id: "breakfast", label: "Breakfast", emoji: "🥞", types: ["breakfast_restaurant", "brunch_restaurant"] },
+  { id: "cafe", label: "Café / Bakery", emoji: "☕", types: ["cafe", "coffee_shop", "bakery"] },
+  { id: "fastfood", label: "Fast food", emoji: "🍟", types: ["fast_food_restaurant", "meal_takeaway"] },
+  { id: "dessert", label: "Dessert", emoji: "🍰", types: ["dessert_restaurant", "ice_cream_shop"] },
+];
 
 /* ---------- Google Maps loader ---------- */
 function loadGoogleMaps(key) {
@@ -352,11 +405,15 @@ const NEARBY_BUCKETS = [
   ["cafe", "bakery"],
 ];
 
-// GPS-based nearby search
-async function fetchNearbyRestaurants(loc, radiusMeters) {
+// Search around a center point. If cuisineIds are given, each cuisine is its own
+// search bucket; otherwise fall back to the general food buckets. Results merged & deduped.
+async function fetchByCuisines(loc, radiusMeters, cuisineIds) {
   const { Place, SearchNearbyRankPreference } = await google.maps.importLibrary("places");
+  const buckets = (cuisineIds && cuisineIds.length)
+    ? cuisineIds.map((id) => (CUISINES.find((c) => c.id === id) || {}).types).filter(Boolean)
+    : NEARBY_BUCKETS;
   const seen = new Map();
-  await Promise.all(NEARBY_BUCKETS.map(async (types) => {
+  await Promise.all(buckets.map(async (types) => {
     try {
       const { places } = await Place.searchNearby({
         fields: PLACE_FIELDS,
@@ -367,32 +424,23 @@ async function fetchNearbyRestaurants(loc, radiusMeters) {
         language: "en-US"
       });
       for (const p of (places || [])) if (!seen.has(p.id)) seen.set(p.id, p);
-    } catch (e) { console.warn("nearby bucket failed", types, e); }
+    } catch (e) { console.warn("cuisine bucket failed", types, e); }
   }));
   return mapPlaces([...seen.values()]);
 }
 
-// Typed city/area: resolve it to a center point, then run the SAME merged
-// nearby search around it so the deck is just as large as the GPS path.
-async function fetchByPlace(query, radiusMeters) {
+// Resolve a typed city/neighborhood/address to a center {lat,lng}
+async function resolvePlaceCenter(query) {
   const { Place } = await google.maps.importLibrary("places");
-  let center = null;
   try {
     const { places } = await Place.searchByText({
       textQuery: query, fields: ["location"], maxResultCount: 1, language: "en-US"
     });
     if (places && places[0] && places[0].location) {
-      center = { lat: places[0].location.lat(), lng: places[0].location.lng() };
+      return { lat: places[0].location.lat(), lng: places[0].location.lng() };
     }
   } catch (e) { console.warn("place resolve failed", e); }
-
-  if (center) return fetchNearbyRestaurants(center, radiusMeters);
-
-  // fallback: if we couldn't resolve a center, do a plain text search
-  const { places } = await Place.searchByText({
-    textQuery: `restaurants in ${query}`, fields: PLACE_FIELDS, maxResultCount: 20, language: "en-US"
-  });
-  return mapPlaces(places);
+  return null;
 }
 
 function mapPlaces(places) {
@@ -449,7 +497,7 @@ async function addStreetView(list) {
 }
 
 /* ---------- room setup ---------- */
-async function startSession() {
+async function connectRoom() {
   const missing = configReady();
   if (missing.length) {
     banner(`Setup needed: ${missing.join(", ")}. Open the setup guide, then reload.`);
@@ -472,43 +520,36 @@ async function startSession() {
     $("setupHint").textContent = "Loading Google Maps…";
     await loadGoogleMaps(CONFIG.googleMapsApiKey);
 
-    // register presence
     await set(ref(db, `rooms/${roomCode}/users/${myId}`), { name: myName, joinedAt: serverTimestamp() });
 
-    // Load or create the shared restaurant deck (first person in the room fills it).
-    const deckRef = ref(db, `rooms/${roomCode}/restaurants`);
-    const snap = await get(deckRef);
-    if (snap.exists()) {
-      restaurants = Object.values(snap.val());
-      $("setupHint").textContent = "Joined room deck ✓";
+    // First person in the room is the host: they set the location.
+    const metaRef = ref(db, `rooms/${roomCode}/meta`);
+    const metaSnap = await get(metaRef);
+    if (metaSnap.exists()) {
+      const meta = metaSnap.val();
+      center = meta.center; radius = meta.radius || radius;
     } else {
-      let found;
+      let c = null;
       if (locMode === "place") {
         const typed = $("placeInput").value.trim();
         if (!typed) { banner("Type a city, neighborhood, or address — or switch to “My location.”"); reset(); return; }
-        $("setupHint").textContent = `Finding restaurants in ${typed}…`;
-        found = await fetchByPlace(typed, radius);
+        $("setupHint").textContent = `Locating ${typed}…`;
+        c = await resolvePlaceCenter(typed);
+        if (!c) { banner("Couldn't find that place. Try a different spelling or a bigger area."); reset(); return; }
       } else {
-        try {
-          $("setupHint").textContent = "Finding restaurants near you…";
-          const loc = await getLocation();
-          found = await fetchNearbyRestaurants(loc, radius);
-        } catch (geoErr) {
-          banner("Location is off. Switch to “Pick a place” above and type where you want to eat.");
-          reset(); return;
-        }
+        try { $("setupHint").textContent = "Getting your location…"; c = await getLocation(); }
+        catch (e) { banner("Location is off. Switch to “Pick a place” and type where you want to eat."); reset(); return; }
       }
-      if (!found.length) { banner("No restaurants found. Try a wider radius or a different city/area."); reset(); return; }
-      $("setupHint").textContent = "Loading storefront photos…";
-      await addStreetView(found);
-      // transaction so two people creating at once don't clobber each other
-      const res = await runTransaction(deckRef, (cur) => cur === null ? arrToMap(found) : cur);
-      restaurants = Object.values(res.snapshot.val());
+      const res = await runTransaction(metaRef, (cur) => cur === null
+        ? { host: myId, center: c, radius: Number(radius), phase: "vote", createdAt: Date.now() } : cur);
+      const meta = res.snapshot.val();
+      center = meta.center; radius = meta.radius;
     }
 
-    enterDeck();
     subscribeUsers();
-    subscribeSwipes();
+    subscribeCuisineVotes();
+    subscribeMeta();
+    enterVote();
   } catch (e) {
     console.error(e);
     banner(e.message || "Something went wrong. Check your keys and connection.");
@@ -516,7 +557,114 @@ async function startSession() {
   }
 }
 
-function reset() { $("startBtn").disabled = false; $("setupHint").textContent = "We'll ask for your location to find restaurants near you."; }
+function reset() { $("startBtn").disabled = false; $("setupHint").textContent = "Only the first person to join sets the location for the whole group."; }
+
+/* ---------- cuisine vote phase ---------- */
+function enterVote() {
+  show($("setupScreen"), false);
+  show($("voteScreen"), true);
+  $("roompill").style.display = "";
+  $("inviteBtn").style.display = "";
+  $("roomLabel").textContent = roomCode;
+  renderCuisines();
+}
+
+function renderCuisines() {
+  const g = $("cuisineGrid");
+  if (g._built) return;
+  g._built = true;
+  g.innerHTML = CUISINES.map((c) =>
+    `<button class="chip" data-cid="${c.id}"><span>${c.emoji} ${escapeHtml(c.label)}</span><span class="cnt" id="cnt_${c.id}"></span></button>`
+  ).join("");
+  g.querySelectorAll(".chip").forEach((ch) => ch.addEventListener("click", () => toggleCuisine(ch.dataset.cid, ch)));
+}
+
+async function toggleCuisine(cid, el) {
+  const on = !myCuisines.has(cid);
+  if (on) myCuisines.add(cid); else myCuisines.delete(cid);
+  el.classList.toggle("sel", on);
+  try { await set(ref(db, `rooms/${roomCode}/cuisineVotes/${myId}/${cid}`), on ? true : null); }
+  catch (e) { console.warn("vote save failed", e); }
+}
+
+function tallyVotes() {
+  const tally = {};
+  for (const uid in cuisineVotes) {
+    const v = cuisineVotes[uid] || {};
+    for (const cid in v) if (v[cid]) tally[cid] = (tally[cid] || 0) + 1;
+  }
+  return tally;
+}
+
+function subscribeCuisineVotes() {
+  onValue(ref(db, `rooms/${roomCode}/cuisineVotes`), (snap) => {
+    cuisineVotes = snap.val() || {};
+    const tally = tallyVotes();
+    CUISINES.forEach((c) => {
+      const el = $("cnt_" + c.id);
+      if (!el) return;
+      const n = tally[c.id] || 0;
+      el.textContent = n;
+      el.classList.toggle("show", n > 0);
+    });
+  });
+}
+
+// cuisines a majority of voters agreed on; if none, any cuisine with a vote
+function computeAgreedCuisines() {
+  const tally = tallyVotes();
+  const voters = Object.keys(cuisineVotes).length || 1;
+  const threshold = Math.max(1, Math.ceil(voters / 2));
+  let agreed = Object.keys(tally).filter((cid) => tally[cid] >= threshold);
+  if (!agreed.length) agreed = Object.keys(tally);
+  return agreed;
+}
+
+function subscribeMeta() {
+  onValue(ref(db, `rooms/${roomCode}/meta`), (snap) => {
+    const meta = snap.val();
+    if (!meta) return;
+    if (meta.center) center = meta.center;
+    if (meta.radius) radius = meta.radius;
+    if (meta.phase === "swipe" && !$("deckScreen").classList.contains("active")) loadDeckAndEnter();
+  });
+}
+
+async function startSwiping() {
+  $("startSwipeBtn").disabled = true;
+  $("voteHint").textContent = "Building the deck…";
+  try {
+    const deckRef = ref(db, `rooms/${roomCode}/restaurants`);
+    const existing = await get(deckRef);
+    if (!existing.exists()) {
+      const agreed = computeAgreedCuisines();
+      let found = await fetchByCuisines(center, radius, agreed);
+      if (!found.length) {
+        $("voteHint").textContent = "No spots found — add more cuisines or widen the radius.";
+        $("startSwipeBtn").disabled = false; return;
+      }
+      $("voteHint").textContent = "Loading storefront photos…";
+      await addStreetView(found);
+      await runTransaction(deckRef, (cur) => cur === null ? arrToMap(found) : cur);
+    }
+    await update(ref(db, `rooms/${roomCode}/meta`), { phase: "swipe" });
+    // subscribeMeta will move everyone (including me) into the deck
+  } catch (e) {
+    console.error(e);
+    $("voteHint").textContent = "Something went wrong building the deck. Try again.";
+    $("startSwipeBtn").disabled = false;
+  }
+}
+
+async function loadDeckAndEnter() {
+  try {
+    const snap = await get(ref(db, `rooms/${roomCode}/restaurants`));
+    if (snap.exists()) restaurants = Object.values(snap.val());
+  } catch (e) { console.warn("deck load failed", e); }
+  show($("voteScreen"), false);
+  enterDeck();
+  if (!swipesSubbed) { subscribeSwipes(); swipesSubbed = true; }
+}
 function arrToMap(arr) { const o = {}; arr.forEach((r, i) => { o[String(i).padStart(3, "0") + "_" + r.id] = r; }); return o; }
 function banner(msg) { const b = $("configBanner"); b.textContent = msg; b.classList.add("show"); }
 
@@ -710,6 +858,7 @@ function subscribeUsers() {
     roomUsers = snap.val() || {};
     userCount = Math.max(1, Object.keys(roomUsers).length);
     $("roomLabel").textContent = `${roomCode} · ${userCount}\u{1F464}`;
+    const vc = $("voterCount"); if (vc) vc.textContent = userCount;
     renderMatches();
   });
 }
@@ -845,7 +994,8 @@ $("genRoom").addEventListener("click", () => {
   const words = ["TACO", "SUSHI", "PIZZA", "RAMEN", "CURRY", "BAGEL", "MANGO", "MOCHA"];
   $("roomInput").value = words[Math.floor(Math.random() * words.length)] + Math.floor(10 + Math.random() * 89);
 });
-$("startBtn").addEventListener("click", startSession);
+$("startBtn").addEventListener("click", connectRoom);
+$("startSwipeBtn").addEventListener("click", startSwiping);
 $("inviteBtn").addEventListener("click", shareInvite);
 $("roompill").addEventListener("click", shareInvite);
 document.querySelectorAll("#locMode .modebtn").forEach((b) => b.addEventListener("click", () => {
