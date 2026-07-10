@@ -58,6 +58,10 @@
   .rchip { font-size: 13px; font-weight: 600; padding: 8px 13px; border-radius: 999px; border: 1px solid var(--line);
     background: var(--card); color: var(--text); cursor: pointer; }
   .rchip:hover { border-color: var(--accent2); }
+  .fieldhint { font-size: 12px; color: var(--muted); margin-top: 8px; }
+  .fieldhint b { color: var(--text); }
+  .invite-note { color: var(--muted); font-size: 13px; margin: 2px 0 4px; }
+  .invite-note b { color: var(--accent2); font-weight: 700; }
   input, select {
     width: 100%; padding: 14px; border-radius: 12px; border: 1px solid var(--line);
     background: var(--card); color: var(--text); font-size: 16px; outline: none;
@@ -224,6 +228,7 @@
         <button id="genRoom" class="iconbtn" title="Random code" aria-label="Random code">🎲</button>
         <button id="inviteSetupBtn" class="iconbtn invite" title="Invite people" aria-label="Invite people">📲</button>
       </div>
+      <div class="fieldhint">Tap 📲 to text this code to your group.</div>
       <div class="recent" id="recentRooms"></div>
 
       <div id="hostControls">
@@ -257,6 +262,7 @@
     <div>
       <h2>What's everyone craving? 🍽️</h2>
       <p>Tap the cuisines you're up for — everyone votes, and the deck is built from what the group agrees on. <span id="voterCount">1</span> in the room.</p>
+      <div class="invite-note" id="inviteNote">Tap <b>Invite</b> above to send your room code to the group.</div>
     </div>
     <div class="cuisine-grid" id="cuisineGrid"></div>
     <button class="primary" id="startSwipeBtn">Start swiping</button>
