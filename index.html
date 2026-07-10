@@ -46,6 +46,9 @@
   input:focus, select:focus { border-color: var(--accent2); }
   .row { display: flex; gap: 10px; }
   .row > * { flex: 1; }
+  .modebtn { padding: 13px; border-radius: 12px; border: 1px solid var(--line); background: var(--card);
+    color: var(--muted); font-size: 15px; font-weight: 600; cursor: pointer; }
+  .modebtn.active { border-color: var(--accent2); color: var(--text); background: #12251f; }
   button.primary {
     margin-top: 16px; width: 100%; padding: 15px; border: none; border-radius: 12px;
     background: linear-gradient(135deg, var(--accent), #ff8a5f); color: white; font-size: 16px;
@@ -125,13 +128,45 @@
   .celebrate.show { display: flex; }
   .celebrate h1 { font-size: 34px; margin: 0; }
   .celebrate .c-card { background: var(--card); border: 1px solid var(--line); border-radius: 16px; padding: 16px 20px; }
+
+  /* Profile sheet */
+  .profile { position: fixed; inset: 0; z-index: 60; background: rgba(6,8,12,0.55);
+    display: none; align-items: flex-end; justify-content: center; }
+  .profile.show { display: flex; }
+  .sheet { width: 100%; max-width: 440px; max-height: 92dvh; background: var(--bg);
+    border-radius: 22px 22px 0 0; border: 1px solid var(--line); overflow-y: auto;
+    box-shadow: 0 -20px 60px rgba(0,0,0,0.55); }
+  .sheet .hero { height: 210px; background-size: cover; background-position: center; background-color: #262b3a;
+    position: relative; }
+  .sheet .close { position: absolute; top: 12px; right: 12px; width: 36px; height: 36px; border-radius: 50%;
+    border: none; background: rgba(0,0,0,0.55); color: #fff; font-size: 18px; cursor: pointer; }
+  .sheet .body { padding: 16px 18px 22px; }
+  .sheet .p-name { font-size: 22px; font-weight: 800; margin: 0 0 8px; }
+  .sheet .p-meta { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 10px; }
+  .sheet .p-meta .tag { background: var(--card); border: 1px solid var(--line); padding: 4px 10px;
+    border-radius: 999px; font-size: 13px; color: #d6d9e3; }
+  .sheet .p-addr { color: var(--muted); font-size: 13px; margin-bottom: 14px; }
+  .sheet .p-map { width: 100%; height: 190px; border-radius: 14px; overflow: hidden; background: var(--card);
+    border: 1px solid var(--line); margin-bottom: 14px; }
+  .sheet .p-map .fallback { display: grid; place-items: center; height: 100%; color: var(--muted); font-size: 13px; text-align: center; padding: 12px; }
+  .sheet .p-links { display: flex; gap: 10px; }
+  .sheet .p-links a { flex: 1; text-align: center; text-decoration: none; font-weight: 700; font-size: 14px;
+    padding: 13px; border-radius: 12px; }
+  .sheet .p-links a.menu { background: var(--accent2); color: #05221d; }
+  .sheet .p-links a.map { background: var(--card); border: 1px solid var(--line); color: var(--text); }
+  .card .detailbar { display: inline-flex; align-items: center; gap: 6px; margin-top: 12px; font-size: 13px;
+    font-weight: 600; color: #fff; background: rgba(255,255,255,0.16); padding: 9px 14px; border-radius: 10px;
+    cursor: pointer; align-self: flex-start; }
 </style>
 </head>
 <body>
 <div class="app">
   <header>
     <div class="logo">Restaurant<span>Match</span></div>
-    <div class="roompill" id="roompill" style="display:none">Room <b id="roomLabel">—</b></div>
+    <div style="display:flex;gap:8px;align-items:center">
+      <div class="roompill" id="roompill" style="display:none">Room <b id="roomLabel">—</b></div>
+      <button class="roompill" id="inviteBtn" style="display:none;cursor:pointer;color:var(--text)">📲 Invite</button>
+    </div>
   </header>
 
   <!-- SETUP -->
@@ -149,15 +184,26 @@
         <input id="roomInput" placeholder="e.g. TACO42" maxlength="12" style="text-transform:uppercase" />
         <button id="genRoom" style="flex:0 0 auto;padding:0 16px;border-radius:12px;border:1px solid var(--line);background:var(--card);color:var(--text);cursor:pointer">🎲</button>
       </div>
-      <label>Search radius</label>
-      <select id="radiusInput">
-        <option value="1600">Walking · 1 mile</option>
-        <option value="3200" selected>Nearby · 2 miles</option>
-        <option value="8000">A short drive · 5 miles</option>
-        <option value="16000">Wider · 10 miles</option>
-      </select>
+      <label>Where do you want to eat?</label>
+      <div class="row" id="locMode">
+        <button type="button" class="modebtn active" data-mode="gps">📍 My location</button>
+        <button type="button" class="modebtn" data-mode="place">🔎 Pick a place</button>
+      </div>
+      <div id="placeWrap" style="display:none">
+        <label>City, neighborhood, or address</label>
+        <input id="placeInput" placeholder="e.g. Wicker Park, Chicago" maxlength="60" />
+      </div>
+      <div id="radiusWrap">
+        <label>Search radius</label>
+        <select id="radiusInput">
+          <option value="1600">Walking · 1 mile</option>
+          <option value="3200" selected>Nearby · 2 miles</option>
+          <option value="8000">A short drive · 5 miles</option>
+          <option value="16000">Wider · 10 miles</option>
+        </select>
+      </div>
       <button class="primary" id="startBtn">Start swiping</button>
-      <div class="hint" id="setupHint">We'll ask for your location to find restaurants near you.</div>
+      <div class="hint" id="setupHint">Only the first person to join sets the location for the whole group.</div>
     </div>
   </section>
 
@@ -177,7 +223,7 @@
       </div>
       <div class="actions">
         <button class="nope" id="btnNope" title="Nope">✕</button>
-        <button class="info-btn" id="btnInfo" title="View on Google Maps">🗺️</button>
+        <button class="info-btn" id="btnInfo" title="Details, map & menu">ℹ️</button>
         <button class="like" id="btnLike" title="Like">♥</button>
       </div>
       <div class="status" id="deckStatus"></div>
@@ -188,6 +234,21 @@
       <div class="waiting" id="matchesEmpty">No matches yet.<br />A match appears the moment <b>everyone</b> in the room likes the same place. ✨</div>
     </div>
   </section>
+</div>
+
+<div id="toast" style="position:fixed;left:50%;bottom:26px;transform:translateX(-50%) translateY(20px);background:#05221d;color:#c9fff2;border:1px solid var(--accent2);padding:11px 18px;border-radius:999px;font-size:14px;font-weight:600;opacity:0;transition:all .25s;z-index:80;pointer-events:none"></div>
+
+<div class="profile" id="profile">
+  <div class="sheet">
+    <div class="hero" id="pHero"><button class="close" id="pClose">✕</button></div>
+    <div class="body">
+      <div class="p-name" id="pName"></div>
+      <div class="p-meta" id="pMeta"></div>
+      <div class="p-addr" id="pAddr"></div>
+      <div class="p-map" id="pMap"></div>
+      <div class="p-links" id="pLinks"></div>
+    </div>
+  </div>
 </div>
 
 <div class="celebrate" id="celebrate">
@@ -246,6 +307,7 @@ let deckIndex = 0;
 let seenMatches = new Set();
 let roomUsers = {};     // userId -> {name}
 let userCount = 1;      // people in the room
+let locMode = "gps";    // "gps" or "place"
 
 /* ---------- Google Maps loader ---------- */
 function loadGoogleMaps(key) {
@@ -271,19 +333,37 @@ function getLocation() {
   });
 }
 
+const PLACE_FIELDS = ["id", "displayName", "location", "rating", "userRatingCount",
+  "priceLevel", "formattedAddress", "photos", "primaryTypeDisplayName",
+  "googleMapsURI", "websiteURI"];
+
+// GPS-based nearby search
 async function fetchNearbyRestaurants(loc, radiusMeters) {
   const { Place, SearchNearbyRankPreference } = await google.maps.importLibrary("places");
-  const request = {
-    fields: ["id", "displayName", "location", "rating", "userRatingCount",
-             "priceLevel", "formattedAddress", "photos", "primaryTypeDisplayName",
-             "googleMapsURI", "websiteURI"],
+  const { places } = await Place.searchNearby({
+    fields: PLACE_FIELDS,
     locationRestriction: { center: loc, radius: Number(radiusMeters) },
     includedPrimaryTypes: ["restaurant"],
     maxResultCount: 20,
     rankPreference: SearchNearbyRankPreference.POPULARITY,
     language: "en-US"
-  };
-  const { places } = await Place.searchNearby(request);
+  });
+  return mapPlaces(places);
+}
+
+// Text-based search for a typed city/area (no GPS needed)
+async function fetchByText(query) {
+  const { Place } = await google.maps.importLibrary("places");
+  const { places } = await Place.searchByText({
+    textQuery: `restaurants in ${query}`,
+    fields: PLACE_FIELDS,
+    maxResultCount: 20,
+    language: "en-US"
+  });
+  return mapPlaces(places);
+}
+
+function mapPlaces(places) {
   return (places || []).map((p) => {
     // grab up to 3 high-res photos; first is the card image, rest are browsable
     let photos = [];
@@ -291,6 +371,11 @@ async function fetchNearbyRestaurants(loc, radiusMeters) {
       photos = (p.photos || []).slice(0, 3).map((ph) => ph.getURI({ maxHeight: 1600, maxWidth: 1200 }));
     } catch (e) {}
     const priceMap = { PRICE_LEVEL_INEXPENSIVE: "$", PRICE_LEVEL_MODERATE: "$$", PRICE_LEVEL_EXPENSIVE: "$$$", PRICE_LEVEL_VERY_EXPENSIVE: "$$$$" };
+    let lat = null, lng = null;
+    try { if (p.location) { lat = p.location.lat(); lng = p.location.lng(); } } catch (e) {}
+    // logo from the restaurant's own website domain (used only as a last resort)
+    let logo = "";
+    try { if (p.websiteURI) logo = `https://www.google.com/s2/favicons?sz=128&domain_url=${encodeURIComponent(p.websiteURI)}`; } catch (e) {}
     return {
       id: p.id,
       name: p.displayName || "Restaurant",
@@ -301,10 +386,34 @@ async function fetchNearbyRestaurants(loc, radiusMeters) {
       address: p.formattedAddress || "",
       url: p.googleMapsURI || "",
       website: p.websiteURI || "",
-      photo: photos[0] || "",
+      lat, lng,
+      storefront: "",   // filled in by addStreetView() when coverage exists
+      logo,
       photos
     };
   });
+}
+
+// Add a Street View storefront image to each restaurant that has coverage.
+async function addStreetView(list) {
+  try {
+    await google.maps.importLibrary("streetView");
+  } catch (e) { return list; }
+  const svc = new google.maps.StreetViewService();
+  const key = CONFIG.googleMapsApiKey;
+  await Promise.all(list.map((r) => new Promise((resolve) => {
+    if (r.lat == null || r.lng == null) return resolve();
+    svc.getPanorama(
+      { location: { lat: r.lat, lng: r.lng }, radius: 60, source: google.maps.StreetViewSource.OUTDOOR },
+      (data, status) => {
+        if (status === "OK") {
+          r.storefront = `https://maps.googleapis.com/maps/api/streetview?size=700x900&location=${r.lat},${r.lng}&fov=75&pitch=8&source=outdoor&key=${key}`;
+        }
+        resolve();
+      }
+    );
+  })));
+  return list;
 }
 
 /* ---------- room setup ---------- */
@@ -341,10 +450,25 @@ async function startSession() {
       restaurants = Object.values(snap.val());
       $("setupHint").textContent = "Joined room deck ✓";
     } else {
-      $("setupHint").textContent = "Finding restaurants near you…";
-      const loc = await getLocation();
-      const found = await fetchNearbyRestaurants(loc, radius);
-      if (!found.length) { banner("No restaurants found nearby. Try a wider radius."); reset(); return; }
+      let found;
+      if (locMode === "place") {
+        const typed = $("placeInput").value.trim();
+        if (!typed) { banner("Type a city, neighborhood, or address — or switch to “My location.”"); reset(); return; }
+        $("setupHint").textContent = `Finding restaurants in ${typed}…`;
+        found = await fetchByText(typed);
+      } else {
+        try {
+          $("setupHint").textContent = "Finding restaurants near you…";
+          const loc = await getLocation();
+          found = await fetchNearbyRestaurants(loc, radius);
+        } catch (geoErr) {
+          banner("Location is off. Switch to “Pick a place” above and type where you want to eat.");
+          reset(); return;
+        }
+      }
+      if (!found.length) { banner("No restaurants found. Try a wider radius or a different city/area."); reset(); return; }
+      $("setupHint").textContent = "Loading storefront photos…";
+      await addStreetView(found);
       // transaction so two people creating at once don't clobber each other
       const res = await runTransaction(deckRef, (cur) => cur === null ? arrToMap(found) : cur);
       restaurants = Object.values(res.snapshot.val());
@@ -364,6 +488,34 @@ function reset() { $("startBtn").disabled = false; $("setupHint").textContent = 
 function arrToMap(arr) { const o = {}; arr.forEach((r, i) => { o[String(i).padStart(3, "0") + "_" + r.id] = r; }); return o; }
 function banner(msg) { const b = $("configBanner"); b.textContent = msg; b.classList.add("show"); }
 
+/* ---------- invite ---------- */
+function inviteUrl() {
+  const u = new URL(location.href);
+  u.searchParams.set("room", roomCode);
+  return u.toString();
+}
+function toast(msg) {
+  const t = $("toast");
+  t.textContent = msg;
+  t.style.opacity = "1"; t.style.transform = "translateX(-50%) translateY(0)";
+  clearTimeout(t._t);
+  t._t = setTimeout(() => { t.style.opacity = "0"; t.style.transform = "translateX(-50%) translateY(20px)"; }, 2600);
+}
+async function shareInvite() {
+  const url = inviteUrl();
+  const text = `Let's pick a place to eat! 🍽️ Join my Restaurant Match group — tap this link and the room code ${roomCode} is already filled in:`;
+  if (navigator.share) {
+    try { await navigator.share({ title: "Restaurant Match", text, url }); return; }
+    catch (e) { if (e && e.name === "AbortError") return; }
+  }
+  // desktop / no share sheet: copy link, then offer SMS
+  try { await navigator.clipboard.writeText(`${text} ${url}`); toast("Invite link copied — paste it into a text!"); }
+  catch (e) { toast("Invite link: " + url); }
+  // also try to open a pre-filled SMS (works on phones)
+  const sms = `sms:?&body=${encodeURIComponent(text + " " + url)}`;
+  setTimeout(() => { window.location.href = sms; }, 400);
+}
+
 function getUserId() {
   let id = localStorage.getItem("mm_uid");
   if (!id) { id = "u_" + Math.random().toString(36).slice(2, 10); localStorage.setItem("mm_uid", id); }
@@ -375,6 +527,7 @@ function enterDeck() {
   show($("setupScreen"), false);
   show($("deckScreen"), true);
   $("roompill").style.display = "";
+  $("inviteBtn").style.display = "";
   $("roomLabel").textContent = roomCode;
   restoreMySwipes();
   renderDeck();
@@ -386,6 +539,14 @@ function restoreMySwipes() {
 }
 
 function currentCard() { return restaurants[deckIndex]; }
+
+// image priority: Street View storefront → Google photos → website logo → emoji
+function heroImage(r) {
+  const g = [r.storefront, ...(r.photos || [])].filter(Boolean);
+  if (g.length) return { url: g[0], contain: false, gallery: g };
+  if (r.logo) return { url: r.logo, contain: true, gallery: [r.logo] };
+  return { url: "", contain: false, gallery: [] };
+}
 
 function renderDeck() {
   const wrap = $("deckWrap");
@@ -406,7 +567,9 @@ function buildCard(r, behind) {
   const card = document.createElement("div");
   card.className = "card";
   if (behind) { card.style.transform = "scale(0.96) translateY(8px)"; card.style.filter = "brightness(0.85)"; }
-  const gallery = (r.photos && r.photos.length ? r.photos : [r.photo]).filter(Boolean);
+  const hero = heroImage(r);
+  const gallery = hero.gallery;
+  const contain = hero.contain;
   card._gallery = gallery;
   card._pi = 0;
   const metaBits = [];
@@ -415,11 +578,11 @@ function buildCard(r, behind) {
   if (r.type) metaBits.push(`<span class="tag">${escapeHtml(r.type)}</span>`);
   const dots = gallery.length > 1
     ? `<div class="dots">${gallery.map((_, i) => `<i class="${i === 0 ? "on" : ""}"></i>`).join("")}</div>` : "";
-  const links = [];
-  if (r.website) links.push(`<a class="menu" href="${escapeAttr(r.website)}" target="_blank" rel="noopener">🍽️ Menu / Website</a>`);
-  if (r.url) links.push(`<a href="${escapeAttr(r.url)}" target="_blank" rel="noopener">🗺️ Map</a>`);
+  const photoStyle = gallery[0]
+    ? `background-image:url('${escapeAttr(gallery[0])}')${contain ? ";background-size:contain;background-repeat:no-repeat;background-color:#12151f" : ""}`
+    : "";
   card.innerHTML = `
-    <div class="photo" style="${gallery[0] ? `background-image:url('${escapeAttr(gallery[0])}')` : ""}">
+    <div class="photo" style="${photoStyle}">
       ${!gallery[0] ? `<div style="position:absolute;inset:0;display:grid;place-items:center;font-size:60px">🍽️</div>` : ""}
     </div>
     ${dots}
@@ -428,9 +591,11 @@ function buildCard(r, behind) {
       <div class="name">${escapeHtml(r.name)}</div>
       <div class="meta">${metaBits.join("")}</div>
       ${r.address ? `<div class="meta" style="margin-top:6px;color:var(--muted);font-size:12px">${escapeHtml(r.address)}</div>` : ""}
-      ${links.length ? `<div class="links">${links.join("")}</div>` : ""}
+      ${!behind ? `<div class="detailbar" data-profile="1">ℹ️ Details, map &amp; menu</div>` : ""}
     </div>`;
   if (!behind) {
+    const db = card.querySelector(".detailbar");
+    if (db) db.addEventListener("click", (e) => { e.stopPropagation(); openProfile(r); });
     // photo browsing via tap zones (does not trigger a swipe)
     card.querySelectorAll(".tapzones div").forEach((z) => {
       z.addEventListener("click", (e) => {
@@ -454,8 +619,8 @@ function attachDrag(card, r) {
   const like = card.querySelector(".stamp.like"), nope = card.querySelector(".stamp.nope");
 
   const down = (x, y, target) => {
-    // ignore drags that start on links or tap zones so buttons/photo-nav work
-    if (target.closest && (target.closest("a") || target.closest(".tapzones"))) return;
+    // ignore drags that start on links, tap zones, or the details bar
+    if (target.closest && (target.closest("a") || target.closest(".tapzones") || target.closest(".detailbar"))) return;
     dragging = true; moved = false; startX = x; startY = y; card.style.transition = "none";
   };
   const move = (x, y) => {
@@ -558,9 +723,11 @@ function renderMatches() {
 
   if (!matches.length) { list.innerHTML = ""; empty.style.display = ""; return; }
   empty.style.display = "none";
-  list.innerHTML = matches.map((r) => `
+  list.innerHTML = matches.map((r) => {
+    const h = heroImage(r);
+    return `
     <div class="match-item">
-      <div class="thumb" style="${r.photo ? `background-image:url('${escapeAttr(r.photo)}')` : ""}">${r.photo ? "" : "🍽️"}</div>
+      <div class="thumb" style="${h.url ? `background-image:url('${escapeAttr(h.url)}');background-size:${h.contain ? "contain" : "cover"};background-repeat:no-repeat` : ""}">${h.url ? "" : "🍽️"}</div>
       <div style="flex:1;min-width:0">
         <div class="m-name">${escapeHtml(r.name)}</div>
         <div class="m-meta">${[r.rating ? "★ " + r.rating : "", r.price, escapeHtml(r.type)].filter(Boolean).join(" · ")}</div>
@@ -570,7 +737,50 @@ function renderMatches() {
         ${r.website ? `<a href="${escapeAttr(r.website)}" target="_blank" rel="noopener">Menu ↗</a>` : ""}
         ${r.url ? `<a href="${escapeAttr(r.url)}" target="_blank" rel="noopener">Map ↗</a>` : ""}
       </div>
-    </div>`).join("");
+    </div>`;
+  }).join("");
+}
+
+/* ---------- restaurant profile sheet ---------- */
+async function openProfile(r) {
+  if (!r) return;
+  const hero = heroImage(r);
+  $("pHero").style.backgroundImage = hero.url ? `url('${hero.url}')` : "";
+  $("pHero").style.backgroundSize = hero.contain ? "contain" : "cover";
+  $("pHero").style.backgroundRepeat = "no-repeat";
+  $("pName").textContent = r.name;
+  const bits = [];
+  if (r.rating) bits.push(`<span class="tag">★ ${r.rating} (${r.reviews})</span>`);
+  if (r.price) bits.push(`<span class="tag">${r.price}</span>`);
+  if (r.type) bits.push(`<span class="tag">${escapeHtml(r.type)}</span>`);
+  $("pMeta").innerHTML = bits.join("");
+  $("pAddr").textContent = r.address || "";
+  const links = [];
+  if (r.website) links.push(`<a class="menu" href="${escapeAttr(r.website)}" target="_blank" rel="noopener">🍽️ Menu / Website</a>`);
+  if (r.url) links.push(`<a class="map" href="${escapeAttr(r.url)}" target="_blank" rel="noopener">🗺️ Open in Maps</a>`);
+  $("pLinks").innerHTML = links.join("");
+  $("profile").classList.add("show");
+  renderMiniMap(r);
+}
+
+async function renderMiniMap(r) {
+  const el = $("pMap");
+  if (r.lat == null || r.lng == null) {
+    el.innerHTML = `<div class="fallback">Map preview unavailable for this spot — use “Open in Maps” below.</div>`;
+    return;
+  }
+  el.innerHTML = "";
+  try {
+    const { Map } = await google.maps.importLibrary("maps");
+    const { Marker } = await google.maps.importLibrary("marker");
+    const map = new Map(el, {
+      center: { lat: r.lat, lng: r.lng }, zoom: 15, disableDefaultUI: true,
+      clickableIcons: false, gestureHandling: "cooperative",
+    });
+    new Marker({ map, position: { lat: r.lat, lng: r.lng }, title: r.name });
+  } catch (e) {
+    el.innerHTML = `<div class="fallback">Couldn't load the map — use “Open in Maps” below.</div>`;
+  }
 }
 
 let firstLoad = true;
@@ -604,9 +814,20 @@ $("genRoom").addEventListener("click", () => {
   $("roomInput").value = words[Math.floor(Math.random() * words.length)] + Math.floor(10 + Math.random() * 89);
 });
 $("startBtn").addEventListener("click", startSession);
+$("inviteBtn").addEventListener("click", shareInvite);
+$("roompill").addEventListener("click", shareInvite);
+document.querySelectorAll("#locMode .modebtn").forEach((b) => b.addEventListener("click", () => {
+  locMode = b.dataset.mode;
+  document.querySelectorAll("#locMode .modebtn").forEach((x) => x.classList.toggle("active", x === b));
+  $("placeWrap").style.display = locMode === "place" ? "" : "none";
+  $("radiusWrap").style.display = locMode === "gps" ? "" : "none";
+  if (locMode === "place") $("placeInput").focus();
+}));
 $("btnLike").addEventListener("click", () => swipeCurrent(true));
 $("btnNope").addEventListener("click", () => swipeCurrent(false));
-$("btnInfo").addEventListener("click", () => { const r = currentCard(); if (r && r.url) window.open(r.url, "_blank"); });
+$("btnInfo").addEventListener("click", () => openProfile(currentCard()));
+$("pClose").addEventListener("click", () => $("profile").classList.remove("show"));
+$("profile").addEventListener("click", (e) => { if (e.target.id === "profile") $("profile").classList.remove("show"); });
 $("tabSwipe").addEventListener("click", () => switchTab(false));
 $("tabMatches").addEventListener("click", () => { switchTab(true); firstLoad = false; });
 $("celebrateClose").addEventListener("click", () => $("celebrate").classList.remove("show"));
@@ -617,6 +838,13 @@ window.addEventListener("keydown", (e) => {
   if (e.key === "ArrowRight") swipeCurrent(true);
   if (e.key === "ArrowLeft") swipeCurrent(false);
 });
+
+// auto-fill room code when opened from an invite link (?room=CODE)
+const preRoom = new URLSearchParams(location.search).get("room");
+if (preRoom) {
+  $("roomInput").value = preRoom.toUpperCase().replace(/[^A-Z0-9]/g, "");
+  $("setupHint").textContent = "You're invited! Enter your name and tap Start swiping.";
+}
 
 const miss = configReady();
 if (miss.length) banner(`Before this works, add: ${miss.join(", ")}. See the setup guide.`);
