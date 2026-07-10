@@ -223,7 +223,7 @@
       </div>
       <div class="actions">
         <button class="nope" id="btnNope" title="Nope">✕</button>
-        <button class="info-btn" id="btnInfo" title="Details, map & menu">ℹ️</button>
+        <button class="info-btn" id="btnInfo" title="Details, photos & map">ℹ️</button>
         <button class="like" id="btnLike" title="Like">♥</button>
       </div>
       <div class="status" id="deckStatus"></div>
@@ -365,10 +365,10 @@ async function fetchByText(query) {
 
 function mapPlaces(places) {
   return (places || []).map((p) => {
-    // grab up to 3 high-res photos; first is the card image, rest are browsable
+    // grab up to 6 high-res food/interior photos; browsable in the card gallery
     let photos = [];
     try {
-      photos = (p.photos || []).slice(0, 3).map((ph) => ph.getURI({ maxHeight: 1600, maxWidth: 1200 }));
+      photos = (p.photos || []).slice(0, 6).map((ph) => ph.getURI({ maxHeight: 1600, maxWidth: 1200 }));
     } catch (e) {}
     const priceMap = { PRICE_LEVEL_INEXPENSIVE: "$", PRICE_LEVEL_MODERATE: "$$", PRICE_LEVEL_EXPENSIVE: "$$$", PRICE_LEVEL_VERY_EXPENSIVE: "$$$$" };
     let lat = null, lng = null;
@@ -591,7 +591,7 @@ function buildCard(r, behind) {
       <div class="name">${escapeHtml(r.name)}</div>
       <div class="meta">${metaBits.join("")}</div>
       ${r.address ? `<div class="meta" style="margin-top:6px;color:var(--muted);font-size:12px">${escapeHtml(r.address)}</div>` : ""}
-      ${!behind ? `<div class="detailbar" data-profile="1">ℹ️ Details, map &amp; menu</div>` : ""}
+      ${!behind ? `<div class="detailbar" data-profile="1">ℹ️ Details, photos &amp; map</div>` : ""}
     </div>`;
   if (!behind) {
     const db = card.querySelector(".detailbar");
@@ -734,7 +734,7 @@ function renderMatches() {
         <div class="m-meta" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escapeHtml(r.address)}</div>
       </div>
       <div class="m-links">
-        ${r.website ? `<a href="${escapeAttr(r.website)}" target="_blank" rel="noopener">Menu ↗</a>` : ""}
+        ${r.website ? `<a href="${escapeAttr(r.website)}" target="_blank" rel="noopener">Website ↗</a>` : ""}
         ${r.url ? `<a href="${escapeAttr(r.url)}" target="_blank" rel="noopener">Map ↗</a>` : ""}
       </div>
     </div>`;
@@ -756,7 +756,7 @@ async function openProfile(r) {
   $("pMeta").innerHTML = bits.join("");
   $("pAddr").textContent = r.address || "";
   const links = [];
-  if (r.website) links.push(`<a class="menu" href="${escapeAttr(r.website)}" target="_blank" rel="noopener">🍽️ Menu / Website</a>`);
+  if (r.website) links.push(`<a class="menu" href="${escapeAttr(r.website)}" target="_blank" rel="noopener">🌐 Website</a>`);
   if (r.url) links.push(`<a class="map" href="${escapeAttr(r.url)}" target="_blank" rel="noopener">🗺️ Open in Maps</a>`);
   $("pLinks").innerHTML = links.join("");
   $("profile").classList.add("show");
