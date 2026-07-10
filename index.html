@@ -334,8 +334,15 @@ function getLocation() {
 }
 
 const PLACE_FIELDS = ["id", "displayName", "location", "rating", "userRatingCount",
-  "priceLevel", "formattedAddress", "photos", "primaryTypeDisplayName",
+  "priceLevel", "formattedAddress", "photos", "primaryType", "primaryTypeDisplayName",
   "googleMapsURI", "websiteURI"];
+
+// primary types to drop (grocery/retail that sneak in via bakery/takeout tags)
+const EXCLUDE_PRIMARY = new Set([
+  "grocery_store", "supermarket", "convenience_store", "liquor_store", "gas_station",
+  "department_store", "warehouse_store", "market", "food_store", "wholesaler",
+  "shopping_mall", "drugstore", "pharmacy"
+]);
 
 // Run several category searches (each capped at 20 by Google) and merge, so the
 // deck isn't limited to 20 and includes cuisine-specific spots, takeout, etc.
@@ -389,7 +396,7 @@ async function fetchByPlace(query, radiusMeters) {
 }
 
 function mapPlaces(places) {
-  return (places || []).map((p) => {
+  return (places || []).filter((p) => !EXCLUDE_PRIMARY.has(p.primaryType)).map((p) => {
     // grab up to 6 high-res food/interior photos; browsable in the card gallery
     let photos = [];
     try {
