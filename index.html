@@ -79,6 +79,8 @@
     border: 1px solid var(--line); background: var(--card); color: var(--text); font-size: 14px;
     font-weight: 600; cursor: pointer; height: fit-content; }
   .chip.sel { border-color: var(--accent2); background: #12251f; }
+  .chip.anychip { flex-basis: 100%; justify-content: center; border-style: dashed; border-color: var(--accent2); font-size: 15px; }
+  .chip.anychip.sel { border-style: solid; background: linear-gradient(135deg, #12251f, #0e2f27); }
   .chip .cnt { min-width: 20px; height: 20px; padding: 0 5px; border-radius: 999px; background: var(--accent2);
     color: #05221d; font-size: 12px; font-weight: 800; display: none; align-items: center; justify-content: center; }
   .chip .cnt.show { display: inline-flex; }
@@ -606,18 +608,46 @@ function renderCuisines() {
   const g = $("cuisineGrid");
   if (g._built) return;
   g._built = true;
-  g.innerHTML = CUISINES.map((c) =>
-    `<button class="chip" data-cid="${c.id}"><span>${c.emoji} ${escapeHtml(c.label)}</span><span class="cnt" id="cnt_${c.id}"></span></button>`
-  ).join("");
-  g.querySelectorAll(".chip").forEach((ch) => ch.addEventListener("click", () => toggleCuisine(ch.dataset.cid, ch)));
+  g.innerHTML =
+    `<button class="chip anychip" data-cid="__any__"><span>🤷 I'm up for anything</span></button>` +
+    CUISINES.map((c) =>
+      `<button class="chip" data-cid="${c.id}"><span>${c.emoji} ${escapeHtml(c.label)}</span><span class="cnt" id="cnt_${c.id}"></span></button>`
+    ).join("");
+  g.querySelectorAll(".chip").forEach((ch) => ch.addEventListener("click", () => {
+    if (ch.dataset.cid === "__any__") toggleAnything();
+    else toggleCuisine(ch.dataset.cid, ch);
+  }));
 }
 
 async function toggleCuisine(cid, el) {
   const on = !myCuisines.has(cid);
   if (on) myCuisines.add(cid); else myCuisines.delete(cid);
   el.classList.toggle("sel", on);
+  updateAnyChip();
   try { await set(ref(db, `rooms/${roomCode}/cuisineVotes/${myId}/${cid}`), on ? true : null); }
   catch (e) { console.warn("vote save failed", e); }
+}
+
+// "I'm up for anything" → select (or clear) every cuisine at once
+async function toggleAnything() {
+  const allSelected = CUISINES.every((c) => myCuisines.has(c.id));
+  const updates = {};
+  CUISINES.forEach((c) => {
+    if (allSelected) { myCuisines.delete(c.id); updates[c.id] = null; }
+    else { myCuisines.add(c.id); updates[c.id] = true; }
+  });
+  document.querySelectorAll("#cuisineGrid .chip").forEach((ch) => {
+    const cid = ch.dataset.cid;
+    if (cid && cid !== "__any__") ch.classList.toggle("sel", myCuisines.has(cid));
+  });
+  updateAnyChip();
+  try { await update(ref(db, `rooms/${roomCode}/cuisineVotes/${myId}`), updates); }
+  catch (e) { console.warn("anything vote failed", e); }
+}
+
+function updateAnyChip() {
+  const anyEl = document.querySelector('#cuisineGrid .chip[data-cid="__any__"]');
+  if (anyEl) anyEl.classList.toggle("sel", CUISINES.every((c) => myCuisines.has(c.id)));
 }
 
 function tallyVotes() {
