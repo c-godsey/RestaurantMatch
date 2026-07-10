@@ -88,6 +88,16 @@
   .chip .cnt { min-width: 20px; height: 20px; padding: 0 5px; border-radius: 999px; background: var(--accent2);
     color: #05221d; font-size: 12px; font-weight: 800; display: none; align-items: center; justify-content: center; }
   .chip .cnt.show { display: inline-flex; }
+  .members { margin-top: 4px; max-height: 132px; overflow-y: auto; }
+  .mlabel { font-size: 12px; color: var(--muted); margin: 2px 0 6px; }
+  .member { display: flex; align-items: center; justify-content: space-between; gap: 8px;
+    padding: 8px 11px; border: 1px solid var(--line); border-radius: 10px; background: var(--card);
+    margin-bottom: 6px; font-size: 14px; }
+  .member .kick { flex-shrink: 0; background: transparent; border: 1px solid var(--accent); color: var(--accent);
+    border-radius: 8px; padding: 5px 11px; font-size: 12px; font-weight: 700; cursor: pointer; }
+  .ghostbtn { display: block; margin: 8px auto 0; background: transparent; border: 1px solid var(--line);
+    color: var(--muted); font-size: 13px; font-weight: 600; padding: 9px 16px; border-radius: 10px; cursor: pointer; }
+  .ghostbtn:hover { color: var(--text); border-color: var(--accent2); }
   button.primary {
     margin-top: 16px; width: 100%; padding: 15px; border: none; border-radius: 12px;
     background: linear-gradient(135deg, var(--accent), #ff8a5f); color: white; font-size: 16px;
@@ -188,10 +198,12 @@
   .sheet .p-map { width: 100%; height: 190px; border-radius: 14px; overflow: hidden; background: var(--card);
     border: 1px solid var(--line); margin-bottom: 14px; }
   .sheet .p-map .fallback { display: grid; place-items: center; height: 100%; color: var(--muted); font-size: 13px; text-align: center; padding: 12px; }
-  .sheet .p-links { display: flex; gap: 10px; }
-  .sheet .p-links a { flex: 1; text-align: center; text-decoration: none; font-weight: 700; font-size: 14px;
+  .sheet .p-links { display: flex; flex-wrap: wrap; gap: 10px; }
+  .sheet .p-links a { flex: 1 1 45%; text-align: center; text-decoration: none; font-weight: 700; font-size: 14px;
     padding: 13px; border-radius: 12px; }
   .sheet .p-links a.menu { background: var(--accent2); color: #05221d; }
+  .sheet .p-links a.dd { background: #ff3008; color: #fff; }
+  .sheet .p-links a.resv { background: #1b4d3e; color: #d7ffef; border: 1px solid var(--accent2); }
   .sheet .p-links a.map { background: var(--card); border: 1px solid var(--line); color: var(--text); }
   .card .detailbar { display: inline-flex; align-items: center; gap: 6px; margin-top: 12px; font-size: 13px;
     font-weight: 600; color: #fff; background: rgba(255,255,255,0.16); padding: 9px 14px; border-radius: 10px;
@@ -248,6 +260,9 @@
             <option value="3200" selected>Nearby · 2 miles</option>
             <option value="8000">A short drive · 5 miles</option>
             <option value="16000">Wider · 10 miles</option>
+            <option value="24000">Regional · 15 miles</option>
+            <option value="32000">Far · 20 miles</option>
+            <option value="40000">Max · 25 miles</option>
           </select>
         </div>
       </div>
@@ -265,7 +280,9 @@
       <div class="invite-note" id="inviteNote">Tap <b>Invite</b> above to send your room code to the group.</div>
     </div>
     <div class="cuisine-grid" id="cuisineGrid"></div>
+    <div class="members" id="membersList"></div>
     <button class="primary" id="startSwipeBtn">Start swiping</button>
+    <button id="voteBackBtn" class="ghostbtn" style="display:none">← Back to swiping</button>
     <div class="hint" id="voteHint">Pressing Start builds the deck for everyone. You can start with any votes in.</div>
   </section>
 
@@ -289,6 +306,7 @@
         <button class="like" id="btnLike" title="Like">♥</button>
       </div>
       <div class="status" id="deckStatus"></div>
+      <button id="editCuisinesBtn" class="ghostbtn">🍽️ Edit cuisines</button>
     </div>
 
     <div id="matchesView" style="flex:1;display:none;flex-direction:column;min-height:0">
@@ -373,6 +391,10 @@ let locMode = "gps";    // "gps" or "place"
 let myCuisines = new Set();
 let cuisineVotes = {};  // uid -> { cuisineId: true }
 let swipesSubbed = false;
+let deckSubbed = false;
+let lastTouch = 0;      // for touch/mouse dedupe
+let hostId = null;      // room creator's user id
+let editingCuisines = false;
 
 // cuisines the group can vote on → Google Place types used to search
 const CUISINES = [
@@ -506,6 +528,9 @@ function mapPlaces(places) {
       address: p.formattedAddress || "",
       url: p.googleMapsURI || "",
       website: p.websiteURI || "",
+      reviewsUrl: `https://search.google.com/local/reviews?placeid=${encodeURIComponent(p.id)}`,
+      doordash: `https://www.doordash.com/search/store/${encodeURIComponent((p.displayName || "") + " " + (p.formattedAddress || ""))}`,
+      reserve: `https://www.opentable.com/s?term=${encodeURIComponent((p.displayName || "") + " " + (p.formattedAddress || ""))}`,
       lat, lng,
       storefront: "",   // filled in by addStreetView() when coverage exists
       logo,
@@ -562,13 +587,14 @@ async function connectRoom() {
     await loadGoogleMaps(CONFIG.googleMapsApiKey);
 
     await set(ref(db, `rooms/${roomCode}/users/${myId}`), { name: myName, joinedAt: serverTimestamp() });
+    await set(ref(db, `rooms/${roomCode}/kicked/${myId}`), null); // clear any prior kick so rejoin works
 
     // First person in the room is the host: they set the location.
     const metaRef = ref(db, `rooms/${roomCode}/meta`);
     const metaSnap = await get(metaRef);
     if (metaSnap.exists()) {
       const meta = metaSnap.val();
-      center = meta.center; radius = meta.radius || radius;
+      center = meta.center; radius = meta.radius || radius; hostId = meta.host;
     } else {
       let c = null;
       if (locMode === "place") {
@@ -584,12 +610,13 @@ async function connectRoom() {
       const res = await runTransaction(metaRef, (cur) => cur === null
         ? { host: myId, center: c, radius: Number(radius), phase: "vote", createdAt: Date.now() } : cur);
       const meta = res.snapshot.val();
-      center = meta.center; radius = meta.radius;
+      center = meta.center; radius = meta.radius; hostId = meta.host;
     }
 
     subscribeUsers();
     subscribeCuisineVotes();
     subscribeMeta();
+    subscribeKicked();
     enterVote();
   } catch (e) {
     console.error(e);
@@ -695,7 +722,9 @@ function subscribeMeta() {
     if (!meta) return;
     if (meta.center) center = meta.center;
     if (meta.radius) radius = meta.radius;
-    if (meta.phase === "swipe" && !$("deckScreen").classList.contains("active")) loadDeckAndEnter();
+    if (meta.host) hostId = meta.host;
+    renderMembers();
+    if (meta.phase === "swipe" && !editingCuisines && !$("deckScreen").classList.contains("active")) loadDeckAndEnter();
   });
 }
 
@@ -705,9 +734,11 @@ async function startSwiping() {
   try {
     const deckRef = ref(db, `rooms/${roomCode}/restaurants`);
     const existing = await get(deckRef);
+    const agreed = computeAgreedCuisines();
+    let found = await fetchByCuisines(center, radius, agreed);
+
     if (!existing.exists()) {
-      const agreed = computeAgreedCuisines();
-      let found = await fetchByCuisines(center, radius, agreed);
+      // first build
       if (!found.length) {
         $("voteHint").textContent = "No spots found — add more cuisines or widen the radius.";
         $("startSwipeBtn").disabled = false; return;
@@ -715,12 +746,33 @@ async function startSwiping() {
       $("voteHint").textContent = "Loading storefront photos…";
       await addStreetView(found);
       await runTransaction(deckRef, (cur) => cur === null ? arrToMap(found) : cur);
+      await update(ref(db, `rooms/${roomCode}/meta`), { phase: "swipe" });
+      // subscribeMeta moves everyone into the deck
+    } else {
+      // deck exists → expand it with any new spots for the updated cuisines
+      const cur = existing.val() || {};
+      const have = new Set(Object.values(cur).map((r) => r.id));
+      const fresh = found.filter((r) => !have.has(r.id));
+      if (fresh.length) {
+        $("voteHint").textContent = "Adding new spots…";
+        await addStreetView(fresh);
+        const start = Object.keys(cur).length;
+        const updates = {};
+        fresh.forEach((r, i) => { updates[String(start + i).padStart(3, "0") + "_" + r.id] = r; });
+        await update(deckRef, updates);
+      }
+      editingCuisines = false;
+      $("voteBackBtn").style.display = "none";
+      $("startSwipeBtn").textContent = "Start swiping";
+      $("startSwipeBtn").disabled = false;
+      $("voteHint").textContent = "";
+      show($("voteScreen"), false);
+      enterDeck();
+      toast(fresh.length ? `Added ${fresh.length} new spot${fresh.length === 1 ? "" : "s"}!` : "No new spots for those cuisines.");
     }
-    await update(ref(db, `rooms/${roomCode}/meta`), { phase: "swipe" });
-    // subscribeMeta will move everyone (including me) into the deck
   } catch (e) {
     console.error(e);
-    $("voteHint").textContent = "Something went wrong building the deck. Try again.";
+    $("voteHint").textContent = "Something went wrong. Try again.";
     $("startSwipeBtn").disabled = false;
   }
 }
@@ -733,6 +785,79 @@ async function loadDeckAndEnter() {
   show($("voteScreen"), false);
   enterDeck();
   if (!swipesSubbed) { subscribeSwipes(); swipesSubbed = true; }
+  subscribeDeck();
+}
+
+// keep the local deck in sync as it's expanded with new cuisines
+function subscribeDeck() {
+  if (deckSubbed) return;
+  deckSubbed = true;
+  onValue(ref(db, `rooms/${roomCode}/restaurants`), (snap) => {
+    const val = snap.val();
+    if (!val) return;
+    const have = new Set(restaurants.map((r) => r.id));
+    let added = 0;
+    Object.values(val).forEach((r) => { if (!have.has(r.id)) { restaurants.push(r); added++; } });
+    if (added) {
+      updateStatus();
+      if (!$("deckWrap").querySelector(".card")) renderDeck(); // deck had run out — show the new ones
+    }
+  });
+}
+
+/* ---------- members + kick ---------- */
+function renderMembers() {
+  const el = $("membersList");
+  if (!el) return;
+  const uids = Object.keys(roomUsers);
+  if (!uids.length) { el.innerHTML = ""; return; }
+  const amHost = myId === hostId;
+  el.innerHTML = `<div class="mlabel">In the room (${uids.length})</div>` + uids.map((uid) => {
+    const u = roomUsers[uid] || {};
+    const tags = (uid === hostId ? " 👑" : "") + (uid === myId ? " (you)" : "");
+    const kick = (amHost && uid !== myId) ? `<button class="kick" data-uid="${escapeAttr(uid)}">Remove</button>` : "";
+    return `<div class="member"><span>${escapeHtml(u.name || "Guest")}${tags}</span>${kick}</div>`;
+  }).join("");
+  el.querySelectorAll(".kick").forEach((b) => b.addEventListener("click", () => kickUser(b.dataset.uid)));
+}
+
+async function kickUser(uid) {
+  if (myId !== hostId || uid === myId) return;
+  const name = (roomUsers[uid] || {}).name || "this person";
+  if (!confirm(`Remove ${name} from the room?`)) return;
+  try {
+    await set(ref(db, `rooms/${roomCode}/kicked/${uid}`), true);
+    await set(ref(db, `rooms/${roomCode}/users/${uid}`), null);
+    await set(ref(db, `rooms/${roomCode}/cuisineVotes/${uid}`), null);
+  } catch (e) { console.warn("kick failed", e); }
+}
+
+function subscribeKicked() {
+  onValue(ref(db, `rooms/${roomCode}/kicked`), (snap) => {
+    const k = snap.val() || {};
+    if (k[myId]) {
+      try { alert("You've been removed from this room by the host."); } catch (e) {}
+      location.href = location.pathname; // back to the home screen
+    }
+  });
+}
+
+/* ---------- edit cuisines mid-swipe ---------- */
+function openCuisineEditor() {
+  editingCuisines = true;
+  $("startSwipeBtn").textContent = "Update deck";
+  $("voteBackBtn").style.display = "";
+  $("voteHint").textContent = "Add cuisines to bring more spots into the deck for everyone.";
+  show($("deckScreen"), false);
+  show($("voteScreen"), true);
+}
+
+function returnToDeck() {
+  editingCuisines = false;
+  $("voteBackBtn").style.display = "none";
+  $("startSwipeBtn").textContent = "Start swiping";
+  show($("voteScreen"), false);
+  show($("deckScreen"), true);
 }
 function arrToMap(arr) { const o = {}; arr.forEach((r, i) => { o[String(i).padStart(3, "0") + "_" + r.id] = r; }); return o; }
 function banner(msg) { const b = $("configBanner"); b.textContent = msg; b.classList.add("show"); }
@@ -908,12 +1033,14 @@ function attachDrag(card, r) {
     dx = 0; dy = 0;
   };
 
-  card.addEventListener("mousedown", (e) => down(e.clientX, e.clientY, e.target));
-  window.addEventListener("mousemove", (e) => move(e.clientX, e.clientY));
-  window.addEventListener("mouseup", (e) => up(e.clientX));
-  card.addEventListener("touchstart", (e) => down(e.touches[0].clientX, e.touches[0].clientY, e.target), { passive: true });
-  card.addEventListener("touchmove", (e) => move(e.touches[0].clientX, e.touches[0].clientY), { passive: true });
-  card.addEventListener("touchend", (e) => up((e.changedTouches[0] || {}).clientX ?? startX));
+  // touch devices fire synthesized mouse events too — ignore mouse briefly after touch
+  const recentTouch = () => Date.now() - lastTouch < 700;
+  card.addEventListener("mousedown", (e) => { if (recentTouch()) return; down(e.clientX, e.clientY, e.target); });
+  window.addEventListener("mousemove", (e) => { if (recentTouch()) return; move(e.clientX, e.clientY); });
+  window.addEventListener("mouseup", (e) => { if (recentTouch()) return; up(e.clientX); });
+  card.addEventListener("touchstart", (e) => { lastTouch = Date.now(); down(e.touches[0].clientX, e.touches[0].clientY, e.target); }, { passive: true });
+  card.addEventListener("touchmove", (e) => { lastTouch = Date.now(); move(e.touches[0].clientX, e.touches[0].clientY); }, { passive: true });
+  card.addEventListener("touchend", (e) => { lastTouch = Date.now(); up((e.changedTouches[0] || {}).clientX ?? startX); });
 }
 
 function fly(card, r, liked) {
@@ -945,6 +1072,7 @@ function subscribeUsers() {
     userCount = Math.max(1, Object.keys(roomUsers).length);
     $("roomLabel").textContent = `${roomCode} · ${userCount}\u{1F464}`;
     const vc = $("voterCount"); if (vc) vc.textContent = userCount;
+    renderMembers();
     renderMatches();
   });
 }
@@ -1001,7 +1129,7 @@ function renderMatches() {
         <div class="m-meta" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escapeHtml(r.address)}</div>
       </div>
       <div class="m-links">
-        ${r.website ? `<a href="${escapeAttr(r.website)}" target="_blank" rel="noopener">Website ↗</a>` : ""}
+        <a href="${escapeAttr(r.reviewsUrl)}" target="_blank" rel="noopener">Reviews ↗</a>
         ${r.url ? `<a href="${escapeAttr(r.url)}" target="_blank" rel="noopener">Map ↗</a>` : ""}
       </div>
     </div>`;
@@ -1023,8 +1151,10 @@ async function openProfile(r) {
   $("pMeta").innerHTML = bits.join("");
   $("pAddr").textContent = r.address || "";
   const links = [];
-  if (r.website) links.push(`<a class="menu" href="${escapeAttr(r.website)}" target="_blank" rel="noopener">🌐 Website</a>`);
-  if (r.url) links.push(`<a class="map" href="${escapeAttr(r.url)}" target="_blank" rel="noopener">🗺️ Open in Maps</a>`);
+  links.push(`<a class="menu" href="${escapeAttr(r.reviewsUrl)}" target="_blank" rel="noopener">⭐ Reviews</a>`);
+  links.push(`<a class="dd" href="${escapeAttr(r.doordash)}" target="_blank" rel="noopener">🛵 DoorDash</a>`);
+  links.push(`<a class="resv" href="${escapeAttr(r.reserve)}" target="_blank" rel="noopener">📅 Reserve</a>`);
+  if (r.url) links.push(`<a class="map" href="${escapeAttr(r.url)}" target="_blank" rel="noopener">🗺️ Maps</a>`);
   $("pLinks").innerHTML = links.join("");
   $("profile").classList.add("show");
   renderMiniMap(r);
@@ -1143,6 +1273,8 @@ $("genRoom").addEventListener("click", () => {
 $("roomInput").addEventListener("input", refreshRoomMode);
 $("startBtn").addEventListener("click", connectRoom);
 $("startSwipeBtn").addEventListener("click", startSwiping);
+$("editCuisinesBtn").addEventListener("click", openCuisineEditor);
+$("voteBackBtn").addEventListener("click", returnToDeck);
 $("inviteBtn").addEventListener("click", shareInvite);
 $("roompill").addEventListener("click", shareInvite);
 $("inviteSetupBtn").addEventListener("click", shareInviteSetup);
