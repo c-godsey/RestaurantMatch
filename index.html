@@ -337,18 +337,32 @@ const PLACE_FIELDS = ["id", "displayName", "location", "rating", "userRatingCoun
   "priceLevel", "formattedAddress", "photos", "primaryTypeDisplayName",
   "googleMapsURI", "websiteURI"];
 
+// Run several category searches (each capped at 20 by Google) and merge, so the
+// deck isn't limited to 20 and includes cuisine-specific spots, takeout, etc.
+const NEARBY_BUCKETS = [
+  ["restaurant"],
+  ["fast_food_restaurant", "meal_takeaway", "meal_delivery"],
+  ["cafe", "bakery"],
+];
+
 // GPS-based nearby search
 async function fetchNearbyRestaurants(loc, radiusMeters) {
   const { Place, SearchNearbyRankPreference } = await google.maps.importLibrary("places");
-  const { places } = await Place.searchNearby({
-    fields: PLACE_FIELDS,
-    locationRestriction: { center: loc, radius: Number(radiusMeters) },
-    includedPrimaryTypes: ["restaurant"],
-    maxResultCount: 20,
-    rankPreference: SearchNearbyRankPreference.POPULARITY,
-    language: "en-US"
-  });
-  return mapPlaces(places);
+  const seen = new Map();
+  await Promise.all(NEARBY_BUCKETS.map(async (types) => {
+    try {
+      const { places } = await Place.searchNearby({
+        fields: PLACE_FIELDS,
+        locationRestriction: { center: loc, radius: Number(radiusMeters) },
+        includedTypes: types,          // matches any of the place's types, not just primary
+        maxResultCount: 20,
+        rankPreference: SearchNearbyRankPreference.POPULARITY,
+        language: "en-US"
+      });
+      for (const p of (places || [])) if (!seen.has(p.id)) seen.set(p.id, p);
+    } catch (e) { console.warn("nearby bucket failed", types, e); }
+  }));
+  return mapPlaces([...seen.values()]);
 }
 
 // Text-based search for a typed city/area (no GPS needed)
