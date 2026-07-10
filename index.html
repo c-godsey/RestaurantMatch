@@ -1,0 +1,625 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+<title>Restaurant Match 🍽️</title>
+<style>
+  :root {
+    --bg: #10121a;
+    --card: #1b1f2c;
+    --accent: #ff5a5f;
+    --accent2: #00c6a2;
+    --text: #f2f3f7;
+    --muted: #9aa0b0;
+    --line: #2a2f3e;
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { margin: 0; height: 100%; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    background: radial-gradient(1200px 600px at 50% -10%, #202538, var(--bg));
+    color: var(--text);
+    display: flex; flex-direction: column; align-items: center;
+    min-height: 100%;
+    overflow: hidden;
+  }
+  .app { width: 100%; max-width: 440px; height: 100dvh; display: flex; flex-direction: column; padding: 14px; }
+  header { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 4px 2px 10px; }
+  .logo { font-weight: 800; font-size: 22px; letter-spacing: -0.5px; }
+  .logo span { color: var(--accent); }
+  .roompill { font-size: 12px; color: var(--muted); background: var(--card); border: 1px solid var(--line);
+    padding: 6px 10px; border-radius: 999px; white-space: nowrap; }
+  .roompill b { color: var(--text); letter-spacing: 1px; }
+  .screen { flex: 1; display: none; flex-direction: column; min-height: 0; }
+  .screen.active { display: flex; }
+
+  /* Setup */
+  .setup { justify-content: center; gap: 14px; }
+  .setup h2 { margin: 0 0 4px; font-size: 20px; }
+  .setup p { margin: 0 0 8px; color: var(--muted); font-size: 14px; line-height: 1.5; }
+  label { font-size: 13px; color: var(--muted); display: block; margin: 10px 0 6px; }
+  input, select {
+    width: 100%; padding: 14px; border-radius: 12px; border: 1px solid var(--line);
+    background: var(--card); color: var(--text); font-size: 16px; outline: none;
+  }
+  input:focus, select:focus { border-color: var(--accent2); }
+  .row { display: flex; gap: 10px; }
+  .row > * { flex: 1; }
+  button.primary {
+    margin-top: 16px; width: 100%; padding: 15px; border: none; border-radius: 12px;
+    background: linear-gradient(135deg, var(--accent), #ff8a5f); color: white; font-size: 16px;
+    font-weight: 700; cursor: pointer;
+  }
+  button.primary:disabled { opacity: 0.5; cursor: default; }
+  .hint { font-size: 12px; color: var(--muted); margin-top: 8px; text-align: center; }
+  .banner { background: #3a1f22; border: 1px solid #6b2b30; color: #ffb3b6; padding: 10px 12px;
+    border-radius: 10px; font-size: 13px; display: none; }
+  .banner.show { display: block; }
+
+  /* Deck */
+  .deck-wrap { flex: 1; position: relative; min-height: 0; margin-top: 4px; }
+  .card {
+    position: absolute; inset: 0; background: var(--card); border-radius: 22px; overflow: hidden;
+    border: 1px solid var(--line); box-shadow: 0 20px 50px rgba(0,0,0,0.45);
+    display: flex; flex-direction: column; will-change: transform;
+  }
+  .card .photo { flex: 1; background-size: cover; background-position: center; background-color: #262b3a; position: relative; }
+  .card .photo::after { content: ""; position: absolute; inset: 0;
+    background: linear-gradient(to top, rgba(10,12,18,0.94) 0%, rgba(10,12,18,0.15) 48%, rgba(10,12,18,0) 72%); }
+  .card .dots { position: absolute; top: 12px; left: 0; right: 0; display: flex; gap: 5px; justify-content: center; z-index: 3; }
+  .card .dots i { width: 26px; height: 4px; border-radius: 3px; background: rgba(255,255,255,0.35); }
+  .card .dots i.on { background: #fff; }
+  .card .tapzones { position: absolute; inset: 0 0 120px 0; display: flex; z-index: 2; }
+  .card .tapzones div { flex: 1; }
+  .card .info { position: absolute; bottom: 0; left: 0; right: 0; padding: 18px; z-index: 3; }
+  .card .name { font-size: 24px; font-weight: 800; margin: 0 0 6px; }
+  .card .meta { font-size: 14px; color: #d6d9e3; display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center; }
+  .card .meta .tag { background: rgba(255,255,255,0.12); padding: 3px 9px; border-radius: 999px; }
+  .card .links { display: flex; gap: 8px; margin-top: 12px; }
+  .card .links a { flex: 1; text-align: center; text-decoration: none; font-size: 13px; font-weight: 600;
+    padding: 9px; border-radius: 10px; background: rgba(255,255,255,0.14); color: #fff; }
+  .card .links a.menu { background: var(--accent2); color: #05221d; }
+  .stamp { position: absolute; top: 26px; font-size: 30px; font-weight: 900; padding: 6px 16px;
+    border: 4px solid; border-radius: 12px; opacity: 0; z-index: 4; text-transform: uppercase; }
+  .stamp.like { left: 20px; color: var(--accent2); border-color: var(--accent2); transform: rotate(-18deg); }
+  .stamp.nope { right: 20px; color: var(--accent); border-color: var(--accent); transform: rotate(18deg); }
+
+  .actions { display: flex; justify-content: center; gap: 22px; padding: 16px 0 4px; }
+  .actions button {
+    width: 62px; height: 62px; border-radius: 50%; border: 1px solid var(--line);
+    background: var(--card); font-size: 26px; cursor: pointer; display: grid; place-items: center;
+    box-shadow: 0 8px 20px rgba(0,0,0,0.35);
+  }
+  .actions .nope { color: var(--accent); }
+  .actions .like { color: var(--accent2); }
+  .actions .info-btn { width: 50px; height: 50px; font-size: 20px; align-self: center; }
+
+  .empty { position: absolute; inset: 0; display: none; flex-direction: column; align-items: center;
+    justify-content: center; text-align: center; gap: 10px; color: var(--muted); padding: 20px; }
+  .empty.show { display: flex; }
+  .empty .big { font-size: 44px; }
+
+  /* Tabs */
+  .tabs { display: flex; gap: 8px; margin-top: 12px; }
+  .tabs button { flex: 1; padding: 11px; border-radius: 10px; border: 1px solid var(--line);
+    background: transparent; color: var(--muted); font-size: 14px; font-weight: 600; cursor: pointer; }
+  .tabs button.active { background: var(--card); color: var(--text); border-color: var(--accent2); }
+  .badge { display: inline-block; min-width: 18px; padding: 0 5px; margin-left: 4px; font-size: 12px;
+    background: var(--accent); color: white; border-radius: 999px; }
+
+  /* Matches */
+  .matches { overflow-y: auto; padding-right: 2px; }
+  .match-item { display: flex; gap: 12px; align-items: center; background: var(--card); border: 1px solid var(--line);
+    border-radius: 14px; padding: 10px; margin-bottom: 10px; }
+  .match-item .thumb { width: 62px; height: 62px; border-radius: 10px; background-size: cover; background-position: center;
+    background-color: #262b3a; flex-shrink: 0; display: grid; place-items: center; }
+  .match-item .m-name { font-weight: 700; font-size: 15px; }
+  .match-item .m-meta { font-size: 12px; color: var(--muted); margin-top: 3px; }
+  .match-item .m-links { display: flex; flex-direction: column; gap: 6px; }
+  .match-item a { color: var(--accent2); font-size: 12px; text-decoration: none; white-space: nowrap; }
+  .status { font-size: 12px; color: var(--muted); text-align: center; padding: 8px; }
+  .waiting { text-align: center; color: var(--muted); font-size: 14px; margin-top: 20px; line-height: 1.6; }
+  .celebrate { position: fixed; inset: 0; background: rgba(10,12,18,0.85); display: none; z-index: 50;
+    flex-direction: column; align-items: center; justify-content: center; text-align: center; gap: 14px; padding: 24px; }
+  .celebrate.show { display: flex; }
+  .celebrate h1 { font-size: 34px; margin: 0; }
+  .celebrate .c-card { background: var(--card); border: 1px solid var(--line); border-radius: 16px; padding: 16px 20px; }
+</style>
+</head>
+<body>
+<div class="app">
+  <header>
+    <div class="logo">Restaurant<span>Match</span></div>
+    <div class="roompill" id="roompill" style="display:none">Room <b id="roomLabel">—</b></div>
+  </header>
+
+  <!-- SETUP -->
+  <section class="screen setup active" id="setupScreen">
+    <div>
+      <h2>Find a place your group craves 🍜</h2>
+      <p>Enter your name and a shared room code. Swipe on nearby restaurants — when everyone in the group likes the same spot, it's a match.</p>
+    </div>
+    <div class="banner" id="configBanner"></div>
+    <div>
+      <label>Your name</label>
+      <input id="nameInput" placeholder="e.g. Christian" maxlength="20" />
+      <label>Room code <span style="color:var(--muted)">(share this with your group)</span></label>
+      <div class="row">
+        <input id="roomInput" placeholder="e.g. TACO42" maxlength="12" style="text-transform:uppercase" />
+        <button id="genRoom" style="flex:0 0 auto;padding:0 16px;border-radius:12px;border:1px solid var(--line);background:var(--card);color:var(--text);cursor:pointer">🎲</button>
+      </div>
+      <label>Search radius</label>
+      <select id="radiusInput">
+        <option value="1600">Walking · 1 mile</option>
+        <option value="3200" selected>Nearby · 2 miles</option>
+        <option value="8000">A short drive · 5 miles</option>
+        <option value="16000">Wider · 10 miles</option>
+      </select>
+      <button class="primary" id="startBtn">Start swiping</button>
+      <div class="hint" id="setupHint">We'll ask for your location to find restaurants near you.</div>
+    </div>
+  </section>
+
+  <!-- DECK -->
+  <section class="screen" id="deckScreen">
+    <div class="tabs">
+      <button class="active" id="tabSwipe">Swipe</button>
+      <button id="tabMatches">Matches <span class="badge" id="matchBadge" style="display:none">0</span></button>
+    </div>
+
+    <div id="swipeView" style="flex:1;display:flex;flex-direction:column;min-height:0">
+      <div class="deck-wrap" id="deckWrap">
+        <div class="empty" id="emptyState">
+          <div class="big">🎉</div>
+          <div id="emptyMsg">That's everyone! Check your matches.</div>
+        </div>
+      </div>
+      <div class="actions">
+        <button class="nope" id="btnNope" title="Nope">✕</button>
+        <button class="info-btn" id="btnInfo" title="View on Google Maps">🗺️</button>
+        <button class="like" id="btnLike" title="Like">♥</button>
+      </div>
+      <div class="status" id="deckStatus"></div>
+    </div>
+
+    <div id="matchesView" style="flex:1;display:none;flex-direction:column;min-height:0">
+      <div class="matches" id="matchesList" style="flex:1"></div>
+      <div class="waiting" id="matchesEmpty">No matches yet.<br />A match appears the moment <b>everyone</b> in the room likes the same place. ✨</div>
+    </div>
+  </section>
+</div>
+
+<div class="celebrate" id="celebrate">
+  <div style="font-size:56px">🎉🍽️🎉</div>
+  <h1>It's a Match!</h1>
+  <div class="c-card">
+    <div id="celebrateName" style="font-weight:800;font-size:20px"></div>
+    <div id="celebrateMeta" style="color:var(--muted);font-size:13px;margin-top:4px"></div>
+  </div>
+  <button class="primary" style="max-width:220px" id="celebrateClose">Keep swiping</button>
+</div>
+
+<script>
+/* ============================================================
+   CONFIG — your keys are already filled in.
+   ============================================================ */
+const CONFIG = {
+  firebase: {
+    apiKey: "AIzaSyA6GInjRzkEYHkke03gl_aqcKfdQy1B4Wk",
+    authDomain: "restaurant-match-c9f74.firebaseapp.com",
+    databaseURL: "https://restaurant-match-c9f74-default-rtdb.firebaseio.com",
+    projectId: "restaurant-match-c9f74",
+    appId: "1:489132243289:web:cbc555d1262b907afaf448"
+  },
+  googleMapsApiKey: "AIzaSyDe2n7I8qx9c8vK0q8JRdM8-tkDrrrmOBQ"
+};
+</script>
+
+<!-- Firebase + app logic (ES module) -->
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+import {
+  getDatabase, ref, set, get, update, onValue, runTransaction, serverTimestamp
+} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
+
+/* ---------- tiny DOM helpers ---------- */
+const $ = (id) => document.getElementById(id);
+const show = (el, on) => el.classList.toggle("active", on);
+
+/* ---------- config sanity check ---------- */
+function configReady() {
+  const f = CONFIG.firebase;
+  const missing = [];
+  if (!f.apiKey || f.apiKey.startsWith("PASTE")) missing.push("Firebase config");
+  if (!f.databaseURL || f.databaseURL.includes("PASTE")) missing.push("Firebase databaseURL");
+  if (!CONFIG.googleMapsApiKey || CONFIG.googleMapsApiKey.startsWith("PASTE")) missing.push("Google Maps API key");
+  return missing;
+}
+
+/* ---------- state ---------- */
+let db, myId, myName, roomCode, radius;
+let restaurants = [];   // ordered list for this room
+let mySwipes = {};      // placeId -> true/false
+let allSwipes = {};     // placeId -> { userId: bool }
+let deckIndex = 0;
+let seenMatches = new Set();
+let roomUsers = {};     // userId -> {name}
+let userCount = 1;      // people in the room
+
+/* ---------- Google Maps loader ---------- */
+function loadGoogleMaps(key) {
+  return new Promise((resolve, reject) => {
+    if (window.google && window.google.maps) return resolve();
+    window.__gmapsCb = () => resolve();
+    const s = document.createElement("script");
+    s.src = `https://maps.googleapis.com/maps/api/js?key=${encodeURIComponent(key)}&libraries=places&loading=async&callback=__gmapsCb&v=weekly`;
+    s.async = true;
+    s.onerror = () => reject(new Error("Failed to load Google Maps. Check your API key and enabled APIs."));
+    document.head.appendChild(s);
+  });
+}
+
+function getLocation() {
+  return new Promise((resolve, reject) => {
+    if (!navigator.geolocation) return reject(new Error("Geolocation not supported on this device."));
+    navigator.geolocation.getCurrentPosition(
+      (pos) => resolve({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
+      (err) => reject(new Error("Location permission denied. Enable it to find nearby restaurants.")),
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 }
+    );
+  });
+}
+
+async function fetchNearbyRestaurants(loc, radiusMeters) {
+  const { Place, SearchNearbyRankPreference } = await google.maps.importLibrary("places");
+  const request = {
+    fields: ["id", "displayName", "location", "rating", "userRatingCount",
+             "priceLevel", "formattedAddress", "photos", "primaryTypeDisplayName",
+             "googleMapsURI", "websiteURI"],
+    locationRestriction: { center: loc, radius: Number(radiusMeters) },
+    includedPrimaryTypes: ["restaurant"],
+    maxResultCount: 20,
+    rankPreference: SearchNearbyRankPreference.POPULARITY,
+    language: "en-US"
+  };
+  const { places } = await Place.searchNearby(request);
+  return (places || []).map((p) => {
+    // grab up to 3 high-res photos; first is the card image, rest are browsable
+    let photos = [];
+    try {
+      photos = (p.photos || []).slice(0, 3).map((ph) => ph.getURI({ maxHeight: 1600, maxWidth: 1200 }));
+    } catch (e) {}
+    const priceMap = { PRICE_LEVEL_INEXPENSIVE: "$", PRICE_LEVEL_MODERATE: "$$", PRICE_LEVEL_EXPENSIVE: "$$$", PRICE_LEVEL_VERY_EXPENSIVE: "$$$$" };
+    return {
+      id: p.id,
+      name: p.displayName || "Restaurant",
+      rating: p.rating || null,
+      reviews: p.userRatingCount || 0,
+      price: priceMap[p.priceLevel] || "",
+      type: p.primaryTypeDisplayName || "",
+      address: p.formattedAddress || "",
+      url: p.googleMapsURI || "",
+      website: p.websiteURI || "",
+      photo: photos[0] || "",
+      photos
+    };
+  });
+}
+
+/* ---------- room setup ---------- */
+async function startSession() {
+  const missing = configReady();
+  if (missing.length) {
+    banner(`Setup needed: ${missing.join(", ")}. Open the setup guide, then reload.`);
+    return;
+  }
+  myName = $("nameInput").value.trim();
+  roomCode = $("roomInput").value.trim().toUpperCase().replace(/[^A-Z0-9]/g, "");
+  radius = $("radiusInput").value;
+  if (!myName) return banner("Enter your name.");
+  if (roomCode.length < 3) return banner("Room code needs at least 3 characters.");
+
+  $("startBtn").disabled = true;
+  $("setupHint").textContent = "Connecting…";
+
+  try {
+    const app = initializeApp(CONFIG.firebase);
+    db = getDatabase(app);
+    myId = getUserId();
+
+    $("setupHint").textContent = "Loading Google Maps…";
+    await loadGoogleMaps(CONFIG.googleMapsApiKey);
+
+    // register presence
+    await set(ref(db, `rooms/${roomCode}/users/${myId}`), { name: myName, joinedAt: serverTimestamp() });
+
+    // Load or create the shared restaurant deck (first person in the room fills it).
+    const deckRef = ref(db, `rooms/${roomCode}/restaurants`);
+    const snap = await get(deckRef);
+    if (snap.exists()) {
+      restaurants = Object.values(snap.val());
+      $("setupHint").textContent = "Joined room deck ✓";
+    } else {
+      $("setupHint").textContent = "Finding restaurants near you…";
+      const loc = await getLocation();
+      const found = await fetchNearbyRestaurants(loc, radius);
+      if (!found.length) { banner("No restaurants found nearby. Try a wider radius."); reset(); return; }
+      // transaction so two people creating at once don't clobber each other
+      const res = await runTransaction(deckRef, (cur) => cur === null ? arrToMap(found) : cur);
+      restaurants = Object.values(res.snapshot.val());
+    }
+
+    enterDeck();
+    subscribeUsers();
+    subscribeSwipes();
+  } catch (e) {
+    console.error(e);
+    banner(e.message || "Something went wrong. Check your keys and connection.");
+    reset();
+  }
+}
+
+function reset() { $("startBtn").disabled = false; $("setupHint").textContent = "We'll ask for your location to find restaurants near you."; }
+function arrToMap(arr) { const o = {}; arr.forEach((r, i) => { o[String(i).padStart(3, "0") + "_" + r.id] = r; }); return o; }
+function banner(msg) { const b = $("configBanner"); b.textContent = msg; b.classList.add("show"); }
+
+function getUserId() {
+  let id = localStorage.getItem("mm_uid");
+  if (!id) { id = "u_" + Math.random().toString(36).slice(2, 10); localStorage.setItem("mm_uid", id); }
+  return id;
+}
+
+/* ---------- deck UI ---------- */
+function enterDeck() {
+  show($("setupScreen"), false);
+  show($("deckScreen"), true);
+  $("roompill").style.display = "";
+  $("roomLabel").textContent = roomCode;
+  restoreMySwipes();
+  renderDeck();
+}
+
+function restoreMySwipes() {
+  const done = mySwipes;
+  while (deckIndex < restaurants.length && done[restaurants[deckIndex].id] !== undefined) deckIndex++;
+}
+
+function currentCard() { return restaurants[deckIndex]; }
+
+function renderDeck() {
+  const wrap = $("deckWrap");
+  wrap.querySelectorAll(".card, .stamp").forEach((n) => n.remove());
+  const r = currentCard();
+  if (!r) { $("emptyState").classList.add("show"); updateStatus(); return; }
+  $("emptyState").classList.remove("show");
+
+  const next = restaurants[deckIndex + 1];
+  if (next) wrap.appendChild(buildCard(next, true));
+  const top = buildCard(r, false);
+  wrap.appendChild(top);
+  attachDrag(top, r);
+  updateStatus();
+}
+
+function buildCard(r, behind) {
+  const card = document.createElement("div");
+  card.className = "card";
+  if (behind) { card.style.transform = "scale(0.96) translateY(8px)"; card.style.filter = "brightness(0.85)"; }
+  const gallery = (r.photos && r.photos.length ? r.photos : [r.photo]).filter(Boolean);
+  card._gallery = gallery;
+  card._pi = 0;
+  const metaBits = [];
+  if (r.rating) metaBits.push(`<span class="tag">★ ${r.rating} (${r.reviews})</span>`);
+  if (r.price) metaBits.push(`<span class="tag">${r.price}</span>`);
+  if (r.type) metaBits.push(`<span class="tag">${escapeHtml(r.type)}</span>`);
+  const dots = gallery.length > 1
+    ? `<div class="dots">${gallery.map((_, i) => `<i class="${i === 0 ? "on" : ""}"></i>`).join("")}</div>` : "";
+  const links = [];
+  if (r.website) links.push(`<a class="menu" href="${escapeAttr(r.website)}" target="_blank" rel="noopener">🍽️ Menu / Website</a>`);
+  if (r.url) links.push(`<a href="${escapeAttr(r.url)}" target="_blank" rel="noopener">🗺️ Map</a>`);
+  card.innerHTML = `
+    <div class="photo" style="${gallery[0] ? `background-image:url('${escapeAttr(gallery[0])}')` : ""}">
+      ${!gallery[0] ? `<div style="position:absolute;inset:0;display:grid;place-items:center;font-size:60px">🍽️</div>` : ""}
+    </div>
+    ${dots}
+    ${gallery.length > 1 && !behind ? `<div class="tapzones"><div data-nav="-1"></div><div data-nav="1"></div></div>` : ""}
+    <div class="info">
+      <div class="name">${escapeHtml(r.name)}</div>
+      <div class="meta">${metaBits.join("")}</div>
+      ${r.address ? `<div class="meta" style="margin-top:6px;color:var(--muted);font-size:12px">${escapeHtml(r.address)}</div>` : ""}
+      ${links.length ? `<div class="links">${links.join("")}</div>` : ""}
+    </div>`;
+  if (!behind) {
+    // photo browsing via tap zones (does not trigger a swipe)
+    card.querySelectorAll(".tapzones div").forEach((z) => {
+      z.addEventListener("click", (e) => {
+        e.stopPropagation();
+        const dir = Number(z.dataset.nav);
+        card._pi = (card._pi + dir + gallery.length) % gallery.length;
+        card.querySelector(".photo").style.backgroundImage = `url('${gallery[card._pi]}')`;
+        const ds = card.querySelectorAll(".dots i");
+        ds.forEach((d, i) => d.classList.toggle("on", i === card._pi));
+      });
+    });
+    const like = document.createElement("div"); like.className = "stamp like"; like.textContent = "Like"; card.appendChild(like);
+    const nope = document.createElement("div"); nope.className = "stamp nope"; nope.textContent = "Nope"; card.appendChild(nope);
+  }
+  return card;
+}
+
+/* ---------- drag / swipe ---------- */
+function attachDrag(card, r) {
+  let startX = 0, startY = 0, dx = 0, dy = 0, dragging = false, moved = false;
+  const like = card.querySelector(".stamp.like"), nope = card.querySelector(".stamp.nope");
+
+  const down = (x, y, target) => {
+    // ignore drags that start on links or tap zones so buttons/photo-nav work
+    if (target.closest && (target.closest("a") || target.closest(".tapzones"))) return;
+    dragging = true; moved = false; startX = x; startY = y; card.style.transition = "none";
+  };
+  const move = (x, y) => {
+    if (!dragging) return;
+    dx = x - startX; dy = y - startY;
+    if (Math.abs(dx) > 6) moved = true;
+    const rot = dx / 18;
+    card.style.transform = `translate(${dx}px, ${dy}px) rotate(${rot}deg)`;
+    const p = Math.min(Math.abs(dx) / 120, 1);
+    if (dx > 0) { like.style.opacity = p; nope.style.opacity = 0; }
+    else { nope.style.opacity = p; like.style.opacity = 0; }
+  };
+  const up = () => {
+    if (!dragging) return;
+    dragging = false;
+    card.style.transition = "transform 0.3s ease, opacity 0.3s ease";
+    if (dx > 110) return fly(card, r, true);
+    if (dx < -110) return fly(card, r, false);
+    card.style.transform = ""; like.style.opacity = 0; nope.style.opacity = 0; dx = 0; dy = 0;
+  };
+
+  card.addEventListener("mousedown", (e) => down(e.clientX, e.clientY, e.target));
+  window.addEventListener("mousemove", (e) => move(e.clientX, e.clientY));
+  window.addEventListener("mouseup", up);
+  card.addEventListener("touchstart", (e) => down(e.touches[0].clientX, e.touches[0].clientY, e.target), { passive: true });
+  card.addEventListener("touchmove", (e) => move(e.touches[0].clientX, e.touches[0].clientY), { passive: true });
+  card.addEventListener("touchend", up);
+}
+
+function fly(card, r, liked) {
+  const x = liked ? window.innerWidth : -window.innerWidth;
+  card.style.transform = `translate(${x}px, ${-40}px) rotate(${liked ? 25 : -25}deg)`;
+  card.style.opacity = "0";
+  recordSwipe(r, liked);
+  setTimeout(() => { deckIndex++; renderDeck(); }, 220);
+}
+
+function swipeCurrent(liked) {
+  const card = $("deckWrap").querySelector(".card:last-of-type");
+  const r = currentCard();
+  if (!card || !r) return;
+  card.style.transition = "transform 0.3s ease, opacity 0.3s ease";
+  fly(card, r, liked);
+}
+
+/* ---------- Firebase sync ---------- */
+async function recordSwipe(r, liked) {
+  mySwipes[r.id] = liked;
+  try { await set(ref(db, `rooms/${roomCode}/swipes/${sanitize(r.id)}/${myId}`), liked); }
+  catch (e) { console.error("swipe save failed", e); }
+}
+
+function subscribeUsers() {
+  onValue(ref(db, `rooms/${roomCode}/users`), (snap) => {
+    roomUsers = snap.val() || {};
+    userCount = Math.max(1, Object.keys(roomUsers).length);
+    $("roomLabel").textContent = `${roomCode} · ${userCount}\u{1F464}`;
+    renderMatches();
+  });
+}
+
+function subscribeSwipes() {
+  onValue(ref(db, `rooms/${roomCode}/swipes`), (snap) => {
+    allSwipes = snap.val() || {};
+    for (const pid in allSwipes) {
+      if (allSwipes[pid] && myId in allSwipes[pid]) {
+        const orig = restaurants.find((x) => sanitize(x.id) === pid);
+        if (orig) mySwipes[orig.id] = allSwipes[pid][myId];
+      }
+    }
+    renderMatches();
+  });
+}
+
+function computeMatches() {
+  // a restaurant is a match only when EVERYONE in the room swiped right on it
+  const need = Math.max(2, userCount); // need at least 2 people for a "match"
+  const out = [];
+  for (const r of restaurants) {
+    const s = allSwipes[sanitize(r.id)];
+    if (!s) continue;
+    const yes = Object.values(s).filter((v) => v === true).length;
+    if (yes >= need) out.push(r);
+  }
+  return out;
+}
+
+function renderMatches() {
+  const matches = computeMatches();
+  const list = $("matchesList"), empty = $("matchesEmpty"), badge = $("matchBadge");
+  if (matches.length) { badge.style.display = ""; badge.textContent = matches.length; }
+  else badge.style.display = "none";
+
+  for (const m of matches) {
+    if (!seenMatches.has(m.id)) {
+      seenMatches.add(m.id);
+      if (seenMatches.size > 0 && $("deckScreen").classList.contains("active")) celebrate(m);
+    }
+  }
+
+  if (!matches.length) { list.innerHTML = ""; empty.style.display = ""; return; }
+  empty.style.display = "none";
+  list.innerHTML = matches.map((r) => `
+    <div class="match-item">
+      <div class="thumb" style="${r.photo ? `background-image:url('${escapeAttr(r.photo)}')` : ""}">${r.photo ? "" : "🍽️"}</div>
+      <div style="flex:1;min-width:0">
+        <div class="m-name">${escapeHtml(r.name)}</div>
+        <div class="m-meta">${[r.rating ? "★ " + r.rating : "", r.price, escapeHtml(r.type)].filter(Boolean).join(" · ")}</div>
+        <div class="m-meta" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escapeHtml(r.address)}</div>
+      </div>
+      <div class="m-links">
+        ${r.website ? `<a href="${escapeAttr(r.website)}" target="_blank" rel="noopener">Menu ↗</a>` : ""}
+        ${r.url ? `<a href="${escapeAttr(r.url)}" target="_blank" rel="noopener">Map ↗</a>` : ""}
+      </div>
+    </div>`).join("");
+}
+
+let firstLoad = true;
+function celebrate(m) {
+  if (firstLoad) return;
+  $("celebrateName").textContent = m.name;
+  $("celebrateMeta").textContent = [m.rating ? "★ " + m.rating : "", m.price, m.type].filter(Boolean).join(" · ");
+  $("celebrate").classList.add("show");
+}
+
+/* ---------- misc ---------- */
+function updateStatus() {
+  const left = restaurants.length - deckIndex;
+  $("deckStatus").textContent = left > 0 ? `${left} place${left === 1 ? "" : "s"} left · ${restaurants.length} total` : "Deck finished — check Matches";
+}
+function sanitize(id) { return String(id).replace(/[.#$/\[\]]/g, "_"); }
+function escapeHtml(s) { return String(s || "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c])); }
+function escapeAttr(s) { return String(s || "").replace(/'/g, "%27").replace(/"/g, "%22"); }
+
+/* ---------- tabs ---------- */
+function switchTab(toMatches) {
+  $("tabSwipe").classList.toggle("active", !toMatches);
+  $("tabMatches").classList.toggle("active", toMatches);
+  $("swipeView").style.display = toMatches ? "none" : "flex";
+  $("matchesView").style.display = toMatches ? "flex" : "none";
+}
+
+/* ---------- events ---------- */
+$("genRoom").addEventListener("click", () => {
+  const words = ["TACO", "SUSHI", "PIZZA", "RAMEN", "CURRY", "BAGEL", "MANGO", "MOCHA"];
+  $("roomInput").value = words[Math.floor(Math.random() * words.length)] + Math.floor(10 + Math.random() * 89);
+});
+$("startBtn").addEventListener("click", startSession);
+$("btnLike").addEventListener("click", () => swipeCurrent(true));
+$("btnNope").addEventListener("click", () => swipeCurrent(false));
+$("btnInfo").addEventListener("click", () => { const r = currentCard(); if (r && r.url) window.open(r.url, "_blank"); });
+$("tabSwipe").addEventListener("click", () => switchTab(false));
+$("tabMatches").addEventListener("click", () => { switchTab(true); firstLoad = false; });
+$("celebrateClose").addEventListener("click", () => $("celebrate").classList.remove("show"));
+setTimeout(() => { firstLoad = false; }, 4000);
+
+window.addEventListener("keydown", (e) => {
+  if (!$("deckScreen").classList.contains("active")) return;
+  if (e.key === "ArrowRight") swipeCurrent(true);
+  if (e.key === "ArrowLeft") swipeCurrent(false);
+});
+
+const miss = configReady();
+if (miss.length) banner(`Before this works, add: ${miss.join(", ")}. See the setup guide.`);
+</script>
+</body>
+</html>
