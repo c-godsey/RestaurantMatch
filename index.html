@@ -38,10 +38,26 @@
   .screen.active { display: flex; }
 
   /* Setup */
-  .setup { justify-content: center; gap: 14px; }
-  .setup h2 { margin: 0 0 4px; font-size: 20px; }
+  .setup { justify-content: flex-start; gap: 14px; overflow-y: auto; padding-top: 6px; }
+  .setup h2 { margin: 0 0 4px; font-size: 22px; }
   .setup p { margin: 0 0 8px; color: var(--muted); font-size: 14px; line-height: 1.5; }
+  .hero { text-align: center; padding: 8px 6px 2px; }
+  .hero-badge { width: 66px; height: 66px; margin: 0 auto 12px; border-radius: 20px; display: grid;
+    place-items: center; font-size: 34px; background: linear-gradient(135deg, var(--accent), #ff8a5f);
+    box-shadow: 0 12px 30px rgba(255,90,95,0.4); }
+  .hero p { max-width: 320px; margin: 0 auto; }
+  .formcard { background: rgba(255,255,255,0.025); border: 1px solid var(--line); border-radius: 18px;
+    padding: 16px; }
   label { font-size: 13px; color: var(--muted); display: block; margin: 10px 0 6px; }
+  label:first-child { margin-top: 0; }
+  .iconbtn { flex: 0 0 auto; width: 52px; height: 52px; border-radius: 12px; border: 1px solid var(--line);
+    background: var(--card); color: var(--text); font-size: 20px; cursor: pointer; display: grid; place-items: center; }
+  .iconbtn.invite { border: none; color: #05221d; background: linear-gradient(135deg, var(--accent2), #3ee0c0); }
+  .recent { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+  .recent .rlabel { width: 100%; font-size: 12px; color: var(--muted); margin-bottom: 0; }
+  .rchip { font-size: 13px; font-weight: 600; padding: 8px 13px; border-radius: 999px; border: 1px solid var(--line);
+    background: var(--card); color: var(--text); cursor: pointer; }
+  .rchip:hover { border-color: var(--accent2); }
   input, select {
     width: 100%; padding: 14px; border-radius: 12px; border: 1px solid var(--line);
     background: var(--card); color: var(--text); font-size: 16px; outline: none;
@@ -188,40 +204,49 @@
 
   <!-- SETUP -->
   <section class="screen setup active" id="setupScreen">
-    <div>
-      <h2>Find a place your group craves 🍜</h2>
-      <p>Enter your name and a shared room code. Swipe on nearby restaurants — when everyone in the group likes the same spot, it's a match.</p>
+    <div class="hero">
+      <div class="hero-badge">🍽️</div>
+      <h2>Restaurant Match</h2>
+      <p>Swipe with your group. When everyone likes the same spot, it's a match.</p>
     </div>
     <div class="banner" id="configBanner"></div>
-    <div>
+    <div class="formcard">
       <label>Your name</label>
-      <input id="nameInput" placeholder="e.g. Christian" maxlength="20" />
-      <label>Room code <span style="color:var(--muted)">(share this with your group)</span></label>
+      <input id="nameInput" placeholder="e.g. Christian" maxlength="20"
+        autocomplete="given-name" autocapitalize="words" autocorrect="off" />
+
+      <label>Room code</label>
       <div class="row">
-        <input id="roomInput" placeholder="e.g. TACO42" maxlength="12" style="text-transform:uppercase" />
-        <button id="genRoom" style="flex:0 0 auto;padding:0 16px;border-radius:12px;border:1px solid var(--line);background:var(--card);color:var(--text);cursor:pointer">🎲</button>
-        <button id="inviteSetupBtn" style="flex:0 0 auto;padding:0 14px;border-radius:12px;border:none;font-weight:800;color:#05221d;background:linear-gradient(135deg,var(--accent2),#3ee0c0);cursor:pointer;white-space:nowrap">📲 Invite</button>
+        <input id="roomInput" placeholder="e.g. TACO42" maxlength="12"
+          style="text-transform:uppercase" autocapitalize="characters" autocorrect="off" spellcheck="false" inputmode="text" />
+        <button id="genRoom" class="iconbtn" title="Random code" aria-label="Random code">🎲</button>
+        <button id="inviteSetupBtn" class="iconbtn invite" title="Invite people" aria-label="Invite people">📲</button>
       </div>
-      <label>Where do you want to eat?</label>
-      <div class="row" id="locMode">
-        <button type="button" class="modebtn active" data-mode="gps">📍 My location</button>
-        <button type="button" class="modebtn" data-mode="place">🔎 Pick a place</button>
+      <div class="recent" id="recentRooms"></div>
+
+      <div id="hostControls">
+        <label>Where do you want to eat?</label>
+        <div class="row" id="locMode">
+          <button type="button" class="modebtn active" data-mode="gps">📍 My location</button>
+          <button type="button" class="modebtn" data-mode="place">🔎 Pick a place</button>
+        </div>
+        <div id="placeWrap" style="display:none">
+          <label>City, neighborhood, or address</label>
+          <input id="placeInput" placeholder="e.g. Wicker Park, Chicago" maxlength="60" autocapitalize="words" />
+        </div>
+        <div id="radiusWrap">
+          <label>Search radius</label>
+          <select id="radiusInput">
+            <option value="1600">Walking · 1 mile</option>
+            <option value="3200" selected>Nearby · 2 miles</option>
+            <option value="8000">A short drive · 5 miles</option>
+            <option value="16000">Wider · 10 miles</option>
+          </select>
+        </div>
       </div>
-      <div id="placeWrap" style="display:none">
-        <label>City, neighborhood, or address</label>
-        <input id="placeInput" placeholder="e.g. Wicker Park, Chicago" maxlength="60" />
-      </div>
-      <div id="radiusWrap">
-        <label>Search radius</label>
-        <select id="radiusInput">
-          <option value="1600">Walking · 1 mile</option>
-          <option value="3200" selected>Nearby · 2 miles</option>
-          <option value="8000">A short drive · 5 miles</option>
-          <option value="16000">Wider · 10 miles</option>
-        </select>
-      </div>
+
       <button class="primary" id="startBtn">Join room</button>
-      <div class="hint" id="setupHint">Only the first person to join sets the location for the whole group.</div>
+      <div class="hint" id="setupHint">Enter a name and room code to get started.</div>
     </div>
   </section>
 
@@ -514,9 +539,10 @@ async function connectRoom() {
   $("setupHint").textContent = "Connecting…";
 
   try {
-    const app = initializeApp(CONFIG.firebase);
-    db = getDatabase(app);
+    ensureDb();
     myId = getUserId();
+    saveName(myName);
+    addRecentRoom(roomCode);
 
     $("setupHint").textContent = "Loading Google Maps…";
     await loadGoogleMaps(CONFIG.googleMapsApiKey);
@@ -1007,11 +1033,72 @@ function switchTab(toMatches) {
   $("matchesView").style.display = toMatches ? "flex" : "none";
 }
 
+/* ---------- home screen: persistence + smart create/join ---------- */
+let fbApp = null;
+function ensureDb() {
+  if (db) return db;
+  if (configReady().length) return null;
+  fbApp = initializeApp(CONFIG.firebase);
+  db = getDatabase(fbApp);
+  return db;
+}
+
+function saveName(n) { try { localStorage.setItem("mm_name", n); } catch (e) {} }
+function loadName() { try { return localStorage.getItem("mm_name") || ""; } catch (e) { return ""; } }
+function loadRecentRooms() { try { return JSON.parse(localStorage.getItem("mm_rooms") || "[]"); } catch (e) { return []; } }
+function addRecentRoom(code) {
+  try {
+    let list = loadRecentRooms().filter((c) => c !== code);
+    list.unshift(code);
+    localStorage.setItem("mm_rooms", JSON.stringify(list.slice(0, 5)));
+  } catch (e) {}
+}
+
+function renderRecentRooms() {
+  const el = $("recentRooms");
+  const list = loadRecentRooms();
+  if (!list.length) { el.innerHTML = ""; return; }
+  el.innerHTML = `<div class="rlabel">Recent rooms</div>` +
+    list.map((c) => `<button class="rchip" data-code="${escapeAttr(c)}">${escapeHtml(c)}</button>`).join("");
+  el.querySelectorAll(".rchip").forEach((b) => b.addEventListener("click", () => {
+    $("roomInput").value = b.dataset.code;
+    refreshRoomMode();
+  }));
+}
+
+// detect whether the typed room already exists → Create vs Join, and show/hide host controls
+let roomModeTimer = null;
+function refreshRoomMode() {
+  const code = $("roomInput").value.trim().toUpperCase().replace(/[^A-Z0-9]/g, "");
+  const btn = $("startBtn"), hc = $("hostControls"), hint = $("setupHint");
+  if (code.length < 3) {
+    btn.textContent = "Join room"; hc.style.display = ""; return;
+  }
+  clearTimeout(roomModeTimer);
+  roomModeTimer = setTimeout(async () => {
+    if (!ensureDb()) return;
+    try {
+      const snap = await get(ref(db, `rooms/${code}/meta`));
+      if (snap.exists()) {
+        btn.textContent = "Join room";
+        hc.style.display = "none";
+        hint.textContent = "Joining an existing room — the host already set the location.";
+      } else {
+        btn.textContent = "Create room";
+        hc.style.display = "";
+        hint.textContent = "You're the first in — pick where the group will eat.";
+      }
+    } catch (e) { /* rules or offline: leave defaults */ }
+  }, 350);
+}
+
 /* ---------- events ---------- */
 $("genRoom").addEventListener("click", () => {
   const words = ["TACO", "SUSHI", "PIZZA", "RAMEN", "CURRY", "BAGEL", "MANGO", "MOCHA"];
   $("roomInput").value = words[Math.floor(Math.random() * words.length)] + Math.floor(10 + Math.random() * 89);
+  refreshRoomMode();
 });
+$("roomInput").addEventListener("input", refreshRoomMode);
 $("startBtn").addEventListener("click", connectRoom);
 $("startSwipeBtn").addEventListener("click", startSwiping);
 $("inviteBtn").addEventListener("click", shareInvite);
@@ -1040,12 +1127,18 @@ window.addEventListener("keydown", (e) => {
   if (e.key === "ArrowLeft") swipeCurrent(false);
 });
 
+// remember the user's name, and show their recent rooms
+$("nameInput").value = loadName();
+renderRecentRooms();
+ensureDb();
+
 // auto-fill room code when opened from an invite link (?room=CODE)
 const preRoom = new URLSearchParams(location.search).get("room");
 if (preRoom) {
   $("roomInput").value = preRoom.toUpperCase().replace(/[^A-Z0-9]/g, "");
-  $("setupHint").textContent = "You're invited! Enter your name and tap Start swiping.";
+  $("setupHint").textContent = "You're invited! Enter your name to join.";
 }
+refreshRoomMode();
 
 const miss = configReady();
 if (miss.length) banner(`Before this works, add: ${miss.join(", ")}. See the setup guide.`);
