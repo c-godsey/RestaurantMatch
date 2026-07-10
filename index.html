@@ -403,12 +403,18 @@ function loadGoogleMaps(key) {
 
 function getLocation() {
   return new Promise((resolve, reject) => {
-    if (!navigator.geolocation) return reject(new Error("Geolocation not supported on this device."));
-    navigator.geolocation.getCurrentPosition(
-      (pos) => resolve({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
-      (err) => reject(new Error("Location permission denied. Enable it to find nearby restaurants.")),
-      { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 }
-    );
+    if (!navigator.geolocation) return reject(new Error("This device doesn't support location — use “Pick a place” instead."));
+    const ok = (pos) => resolve({ lat: pos.coords.latitude, lng: pos.coords.longitude });
+    const fail = (err) => {
+      let msg;
+      if (err.code === 1) msg = "Location is blocked for this site in your browser. Allow it (address-bar icon), or use “Pick a place.”";
+      else if (err.code === 3) msg = "Getting your location timed out. Tap Create room again, or use “Pick a place.”";
+      else msg = "Couldn't read your location right now — use “Pick a place” to type where you want to eat.";
+      const e = new Error(msg); e.code = err.code; reject(e);
+    };
+    // low-accuracy is plenty for city-level restaurant search and far less likely to time out
+    navigator.geolocation.getCurrentPosition(ok, fail,
+      { enableHighAccuracy: false, timeout: 15000, maximumAge: 300000 });
   });
 }
 
@@ -565,7 +571,7 @@ async function connectRoom() {
         if (!c) { banner("Couldn't find that place. Try a different spelling or a bigger area."); reset(); return; }
       } else {
         try { $("setupHint").textContent = "Getting your location…"; c = await getLocation(); }
-        catch (e) { banner("Location is off. Switch to “Pick a place” and type where you want to eat."); reset(); return; }
+        catch (e) { banner(e.message || "Couldn't get your location — use “Pick a place.”"); reset(); return; }
       }
       const res = await runTransaction(metaRef, (cur) => cur === null
         ? { host: myId, center: c, radius: Number(radius), phase: "vote", createdAt: Date.now() } : cur);
