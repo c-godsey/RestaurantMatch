@@ -365,14 +365,25 @@ async function fetchNearbyRestaurants(loc, radiusMeters) {
   return mapPlaces([...seen.values()]);
 }
 
-// Text-based search for a typed city/area (no GPS needed)
-async function fetchByText(query) {
+// Typed city/area: resolve it to a center point, then run the SAME merged
+// nearby search around it so the deck is just as large as the GPS path.
+async function fetchByPlace(query, radiusMeters) {
   const { Place } = await google.maps.importLibrary("places");
+  let center = null;
+  try {
+    const { places } = await Place.searchByText({
+      textQuery: query, fields: ["location"], maxResultCount: 1, language: "en-US"
+    });
+    if (places && places[0] && places[0].location) {
+      center = { lat: places[0].location.lat(), lng: places[0].location.lng() };
+    }
+  } catch (e) { console.warn("place resolve failed", e); }
+
+  if (center) return fetchNearbyRestaurants(center, radiusMeters);
+
+  // fallback: if we couldn't resolve a center, do a plain text search
   const { places } = await Place.searchByText({
-    textQuery: `restaurants in ${query}`,
-    fields: PLACE_FIELDS,
-    maxResultCount: 20,
-    language: "en-US"
+    textQuery: `restaurants in ${query}`, fields: PLACE_FIELDS, maxResultCount: 20, language: "en-US"
   });
   return mapPlaces(places);
 }
@@ -469,7 +480,7 @@ async function startSession() {
         const typed = $("placeInput").value.trim();
         if (!typed) { banner("Type a city, neighborhood, or address — or switch to “My location.”"); reset(); return; }
         $("setupHint").textContent = `Finding restaurants in ${typed}…`;
-        found = await fetchByText(typed);
+        found = await fetchByPlace(typed, radius);
       } else {
         try {
           $("setupHint").textContent = "Finding restaurants near you…";
@@ -834,7 +845,7 @@ document.querySelectorAll("#locMode .modebtn").forEach((b) => b.addEventListener
   locMode = b.dataset.mode;
   document.querySelectorAll("#locMode .modebtn").forEach((x) => x.classList.toggle("active", x === b));
   $("placeWrap").style.display = locMode === "place" ? "" : "none";
-  $("radiusWrap").style.display = locMode === "gps" ? "" : "none";
+  // radius applies to both modes now (it's the search distance around the chosen spot)
   if (locMode === "place") $("placeInput").focus();
 }));
 $("btnLike").addEventListener("click", () => swipeCurrent(true));
