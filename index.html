@@ -766,7 +766,6 @@ function buildCard(r, behind) {
       ${!gallery[0] ? `<div style="position:absolute;inset:0;display:grid;place-items:center;font-size:60px">🍽️</div>` : ""}
     </div>
     ${dots}
-    ${gallery.length > 1 && !behind ? `<div class="tapzones"><div data-nav="-1"></div><div data-nav="1"></div></div>` : ""}
     <div class="info">
       <div class="name">${escapeHtml(r.name)}</div>
       <div class="meta">${metaBits.join("")}</div>
@@ -776,58 +775,68 @@ function buildCard(r, behind) {
   if (!behind) {
     const db = card.querySelector(".detailbar");
     if (db) db.addEventListener("click", (e) => { e.stopPropagation(); openProfile(r); });
-    // photo browsing via tap zones (does not trigger a swipe)
-    card.querySelectorAll(".tapzones div").forEach((z) => {
-      z.addEventListener("click", (e) => {
-        e.stopPropagation();
-        const dir = Number(z.dataset.nav);
-        card._pi = (card._pi + dir + gallery.length) % gallery.length;
-        card.querySelector(".photo").style.backgroundImage = `url('${gallery[card._pi]}')`;
-        const ds = card.querySelectorAll(".dots i");
-        ds.forEach((d, i) => d.classList.toggle("on", i === card._pi));
-      });
-    });
     const like = document.createElement("div"); like.className = "stamp like"; like.textContent = "Like"; card.appendChild(like);
     const nope = document.createElement("div"); nope.className = "stamp nope"; nope.textContent = "Nope"; card.appendChild(nope);
   }
   return card;
 }
 
+// change the visible gallery image (tap left/right on the photo)
+function navImage(card, dir) {
+  const g = card._gallery || [];
+  if (g.length < 2) return;
+  card._pi = (card._pi + dir + g.length) % g.length;
+  const photo = card.querySelector(".photo");
+  if (photo) photo.style.backgroundImage = `url('${g[card._pi]}')`;
+  card.querySelectorAll(".dots i").forEach((d, i) => d.classList.toggle("on", i === card._pi));
+}
+
 /* ---------- drag / swipe ---------- */
+// Drag horizontally (anywhere on the card, photo included) = choose.
+// A quick tap on the photo = change image (left half = previous, right half = next).
 function attachDrag(card, r) {
-  let startX = 0, startY = 0, dx = 0, dy = 0, dragging = false, moved = false;
+  let startX = 0, startY = 0, dx = 0, dy = 0, dragging = false, moved = false, canTapNav = false;
   const like = card.querySelector(".stamp.like"), nope = card.querySelector(".stamp.nope");
 
   const down = (x, y, target) => {
-    // ignore drags that start on links, tap zones, or the details bar
-    if (target.closest && (target.closest("a") || target.closest(".tapzones") || target.closest(".detailbar"))) return;
+    // let links and the details bar handle their own taps
+    if (target.closest && (target.closest("a") || target.closest(".detailbar"))) return;
     dragging = true; moved = false; startX = x; startY = y; card.style.transition = "none";
+    // a tap counts as image-nav only if it starts on the photo, not the info overlay
+    canTapNav = !(target.closest && target.closest(".info"));
   };
   const move = (x, y) => {
     if (!dragging) return;
     dx = x - startX; dy = y - startY;
-    if (Math.abs(dx) > 6) moved = true;
+    if (Math.abs(dx) > 6 || Math.abs(dy) > 6) moved = true;
     const rot = dx / 18;
     card.style.transform = `translate(${dx}px, ${dy}px) rotate(${rot}deg)`;
     const p = Math.min(Math.abs(dx) / 120, 1);
     if (dx > 0) { like.style.opacity = p; nope.style.opacity = 0; }
     else { nope.style.opacity = p; like.style.opacity = 0; }
   };
-  const up = () => {
+  const up = (x) => {
     if (!dragging) return;
     dragging = false;
     card.style.transition = "transform 0.3s ease, opacity 0.3s ease";
     if (dx > 110) return fly(card, r, true);
     if (dx < -110) return fly(card, r, false);
-    card.style.transform = ""; like.style.opacity = 0; nope.style.opacity = 0; dx = 0; dy = 0;
+    card.style.transform = ""; like.style.opacity = 0; nope.style.opacity = 0;
+    // it was a tap (no real movement) → change the photo
+    if (!moved && canTapNav) {
+      const rect = card.getBoundingClientRect();
+      const rel = (x - rect.left) / rect.width;
+      navImage(card, rel < 0.5 ? -1 : 1);
+    }
+    dx = 0; dy = 0;
   };
 
   card.addEventListener("mousedown", (e) => down(e.clientX, e.clientY, e.target));
   window.addEventListener("mousemove", (e) => move(e.clientX, e.clientY));
-  window.addEventListener("mouseup", up);
+  window.addEventListener("mouseup", (e) => up(e.clientX));
   card.addEventListener("touchstart", (e) => down(e.touches[0].clientX, e.touches[0].clientY, e.target), { passive: true });
   card.addEventListener("touchmove", (e) => move(e.touches[0].clientX, e.touches[0].clientY), { passive: true });
-  card.addEventListener("touchend", up);
+  card.addEventListener("touchend", (e) => up((e.changedTouches[0] || {}).clientX ?? startX));
 }
 
 function fly(card, r, liked) {
